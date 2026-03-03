@@ -1,5 +1,14 @@
+# agent
 langchain
 langchain-community
 langchain-ollama
-python-dotenv
+
+
+# vision
 opencv-python
+ultralytics
+
+
+
+# server
+fastapi
