@@ -1,5 +1,4 @@
-from app import create_app
-from app.yolo_detect import realtime_cam
+from app import create_app, t
 import uvicorn
 import os
 from dotenv import load_dotenv
@@ -15,10 +14,6 @@ DEBUG = os.getenv("VISION_DEBUG").lower() == "true"
 
 app = create_app()
 
-
-if DEBUG:
-    from threading import Thread
-    t = Thread(target=realtime_cam)
 
 if __name__ == "__main__":
     if DEBUG:

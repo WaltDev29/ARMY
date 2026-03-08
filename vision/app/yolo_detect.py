@@ -1,25 +1,40 @@
 from ultralytics import YOLO
 import cv2
 from pathlib import Path
+import atexit
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    print("카메라를 연결할 수 없습니다.")
-    exit()
+cap = None
+
 
 model = YOLO(BASE_DIR/"yolo11s.pt")
 
 
 
+def _get_cap() -> None:
+    global cap
+    if cap is None:
+        cap = cv2.VideoCapture(0)
+    return cap
+
+def _release_cap() -> None:
+    global cap
+    cap.release()
+    print("cap released")
+
+atexit.register(_release_cap)
+
 # ============ Object Detection Function ============
-def detect_objects() -> dict|None:
+def detect_objects() -> list[dict]|None:
     '''
     카메라 프레임을 읽어 YOLO 추론을 합니다.
-    ## return
-    dict|None
     '''
+    cap = _get_cap()
+    if not cap.isOpened():
+        print("카메라 연결 실패")
+        return None
+    
     ret, frame = cap.read()
 
     if not ret:
@@ -51,7 +66,40 @@ def detect_objects() -> dict|None:
 
 
 
-def realtime_cam():
+def detect_objects_from_image(image: cv2.Mat) -> list[dict]|None:
+    '''
+    전달받은 이미지에 대해 YOLO 추론을 합니다.
+    '''
+    result = model(image, verbose=False)
+    r = result[0]
+    
+    detected = []
+
+
+    for box in r.boxes:
+        conf = float(box.conf[0])
+        if conf < 0.7: continue
+
+        x1,y1,x2,y2 = map(int, box.xyxy[0])
+        cls_id = int(box.cls[0])
+        cls_name = r.names[cls_id]
+
+        detected.append({
+            "class": cls_name,
+            "box": [x1,y1,x2,y2]
+        })
+    
+
+    return detected
+
+
+
+def realtime_cam() -> None:
+    cap = _get_cap()
+    if not cap.isOpened():
+        print("카메라 연결 실패")
+        return
+    
     while True:
         ret, frame = cap.read()
 
@@ -81,8 +129,6 @@ def realtime_cam():
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-
-    cap.release()
     cv2.destroyAllWindows()
 
 
