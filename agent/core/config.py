@@ -13,6 +13,7 @@ load_dotenv(BASE_DIR / ENV_PATH)
 class Config(BaseModel):
     VISION_URL:str = os.getenv("VISION_URL")
     BOT_URL:str = os.getenv("BOT_URL")
+    DOFBOT:bool = os.getenv("DOFBOT")
 
 config = Config()
 

@@ -9,6 +9,10 @@ from langchain.messages import AIMessage
 
 agent = create_agent()
 
+config = {
+    "configurable": {"session_id": "user1"}
+}
+
 while True:
     topic = input("입력 : ")
     if not topic: continue
@@ -16,9 +20,9 @@ while True:
 
     message = {"messages": [{"role": "user", "content": topic}]}
     
-
-
-    response = agent.invoke(message)
+    # for chunk in agent.stream(message, config=config):
+    #     print(chunk)
+    response = agent.invoke(message, config=config)
     ai_messages = [m for m in response["messages"] if isinstance(m, AIMessage)]
 
     for ai_objs in ai_messages:
