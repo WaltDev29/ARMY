@@ -4,3 +4,5 @@ uvicorn
 opencv-python
 ultralytics
 python-multipart
+
+pyrealsense2

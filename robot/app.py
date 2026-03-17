@@ -7,6 +7,7 @@ import time
 # 변수/함수
 # ====================================
 API = "http://localhost:5000" # pybullet 서버
+# API = "http://192.168.25.100:5000" # DOFBot 서버
 
 joint_limits = [
     [-90.0, 90.0],
