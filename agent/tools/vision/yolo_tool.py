@@ -22,8 +22,9 @@ detect_objects_tool = tool(
     detect_objects,
     description="""
     카메라에 보이는 객체들의 정보를 반환합니다. 
-    반환값 : [{class:객체명, box:[x1,y1,x2,y2]}, ...]
-    반환값 중 box는 객체의 바운딩 박스를 나타내며, x1,y1은 왼쪽 위 꼭지점의 좌표, x2,y2는 오른쪽 아래 꼭지점의 좌표입니다. 
+    반환값 : [{class:객체명, box:[x1,y1,x2,y2], xywh:[x,y,w,h]}, ...]
+    반환값 중 box는 객체의 바운딩 박스를 나타내며, x1,y1은 왼쪽 위 꼭지점의 좌표, x2,y2는 오른쪽 아래 꼭지점의 좌표입니다.
+    반환값 중 xywh는 객체의 중심 좌표 x,y와 물체의 너비 w, 높이 h입니다.
     """
 )
 
@@ -71,8 +72,9 @@ detect_objects_from_image_tool = tool(
     detect_objects_from_image,
     description="""
     카메라 이미지에서 객체들을 탐지하여 정보를 반환합니다.
-    반환값 : [{class:객체명, box:[x1,y1,x2,y2]}, ...]
-    반환값 중 box는 객체의 바운딩 박스를 나타내며, x1,y1은 왼쪽 위 꼭지점의 좌표, x2,y2는 오른쪽 아래 꼭지점의 좌표입니다. 
+    반환값 : [{class:객체명, box:[x1,y1,x2,y2], xywh:[x,y,w,h]}, ...]
+    반환값 중 box는 객체의 바운딩 박스를 나타내며, x1,y1은 왼쪽 위 꼭지점의 좌표, x2,y2는 오른쪽 아래 꼭지점의 좌표입니다.
+    반환값 중 xywh는 객체의 중심 좌표 x,y와 물체의 너비 w, 높이 h입니다.
     """
 )
 

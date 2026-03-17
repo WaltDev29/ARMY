@@ -53,12 +53,14 @@ def detect_objects() -> list[dict]|None:
         if conf < 0.7: continue
 
         x1,y1,x2,y2 = map(int, box.xyxy[0])
+        x, y, w, h = map(float,box.xywh[0])
         cls_id = int(box.cls[0])
         cls_name = r.names[cls_id]
 
         detected.append({
             "class": cls_name,
-            "box": [x1,y1,x2,y2]
+            "box": [x1,y1,x2,y2],
+            "xywh": [x, y, w, h]
         })
     
 
@@ -81,12 +83,14 @@ def detect_objects_from_image(image: cv2.Mat) -> list[dict]|None:
         if conf < 0.7: continue
 
         x1,y1,x2,y2 = map(int, box.xyxy[0])
+        x, y, w, h = map(float,box.xywh[0])
         cls_id = int(box.cls[0])
         cls_name = r.names[cls_id]
 
         detected.append({
             "class": cls_name,
-            "box": [x1,y1,x2,y2]
+            "box": [x1,y1,x2,y2],
+            "xywh": [x, y, w, h]
         })
     
 
