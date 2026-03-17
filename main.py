@@ -20,12 +20,14 @@ while True:
 
     message = {"messages": [{"role": "user", "content": topic}]}
     
-    # for chunk in agent.stream(message, config=config):
-    #     print(chunk)
     response = agent.invoke(message, config=config)
-    ai_messages = [m for m in response["messages"] if isinstance(m, AIMessage)]
+    # ai_messages = [m for m in response["messages"] if isinstance(m, AIMessage)]
 
-    for ai_objs in ai_messages:
-        print("\n\n============ AI Response ============")
-        for ai_attr in ai_objs:
-            print(f"{ai_attr[0]} : {ai_attr[1]}")
+    # for ai_objs in ai_messages:
+    #     print("\n\n============ AI Response ============")
+    #     for ai_attr in ai_objs:
+    #         print(f"{ai_attr[0]} : {ai_attr[1]}")
+
+    # Stream 방식 출력
+    for chunk in agent.stream(message, config=config):
+        print(chunk)

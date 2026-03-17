@@ -212,7 +212,7 @@
 		<parent link="gripper_base" />
 		<child link="end-effector" />
 
-		<origin xyz="0 0 0.09" />  <!-- 기존 길이는 0.11m이지만, 보정을 위해 임시로 0.09으로 조정했습니다.-->
+		<origin xyz="0 0 0.11" />
 	</joint>
 
 	<link name="end-effector"/>
