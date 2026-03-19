@@ -1,16 +1,9 @@
 from fastapi import FastAPI
-from .camera import get_rgb_image, get_depth_data, start_debug_stream, stop_camera
+from .camera import get_rgb_image, get_depth_data, start_debug_stream, stop_camera, get_intrinsics
 from .yolo_detect import detect_objects
 
 def create_app() -> FastAPI:
     app = FastAPI()
-
-    @app.on_event("startup")
-    async def startup_event():
-        # 앱 시작 시 카메라 디버그 스트림을 켤 수 있습니다.
-        # 필요시 주석을 해제하세요.
-        start_debug_stream()
-        pass
 
     @app.on_event("shutdown")
     async def shutdown_event():
@@ -60,7 +53,8 @@ def create_app() -> FastAPI:
 
         return {
             "status": "success",
-            "detections": results
+            "detections": results,
+            "intrinsics": get_intrinsics()
         }
 
     return app

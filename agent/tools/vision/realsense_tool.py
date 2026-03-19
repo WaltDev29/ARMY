@@ -7,9 +7,12 @@ def get_realsense_detections() -> Dict[str, Any]:
     """
     RealSense 카메라와 YOLO를 사용하여 현재 프레임의 객체 탐지 결과와 거리(Depth) 정보를 반환합니다.
     """
-    resp = requests.get(f"{config.VISION_URL}/detect")
-    resp.raise_for_status()
-    return resp.json()
+    try:
+        resp = requests.get(f"{config.VISION_URL}/detect", timeout=5)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.RequestException as e:
+        return {"status": "error", "error": str(e), "detections": []}
 
 realsense_detect_tool = tool(
     get_realsense_detections,

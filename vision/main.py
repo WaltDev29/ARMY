@@ -13,18 +13,20 @@ DEBUG = os.getenv("VISION_DEBUG").lower() == "true"
 
 if os.getenv("REALSENSE").lower() == "true":
     import realsense_app as app
+    t = app.start_debug_stream()
 else:
     import app
+    t = app.t
 
-app = app.create_app()
+server = app.create_app()
 
 
 if __name__ == "__main__":
     if DEBUG:
-        app.t.start()
+        t.start()
 
     uvicorn.run(
-        "main:app",
+        "main:server",
         host="0.0.0.0",
         port=8000
     )

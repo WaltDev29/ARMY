@@ -127,8 +127,8 @@ def start_debug_stream():
         
     if not is_debug_running:
         is_debug_running = True
-        debug_thread = threading.Thread(target=_debug_stream_loop, daemon=True)
-        debug_thread.start()
+        t = threading.Thread(target=_debug_stream_loop, daemon=True)
+        return t
 
 def stop_camera():
     global is_streaming, is_debug_running, debug_thread, pipeline
@@ -139,3 +139,25 @@ def stop_camera():
     if is_streaming and pipeline is not None:
         pipeline.stop()
         is_streaming = False
+
+def get_intrinsics():
+    """RealSense 카메라의 고유 스펙(Intrinsics)을 반환합니다."""
+    global pipeline, is_streaming
+    if not is_streaming:
+        init_camera()
+    
+    try:
+        profile = pipeline.get_active_profile()
+        color_stream = profile.get_stream(rs.stream.color)
+        intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
+        return {
+            "width": intrinsics.width,
+            "height": intrinsics.height,
+            "ppx": intrinsics.ppx,
+            "ppy": intrinsics.ppy,
+            "fx": intrinsics.fx,
+            "fy": intrinsics.fy
+        }
+    except Exception as e:
+        print(f"Error getting intrinsics: {e}")
+        return None
