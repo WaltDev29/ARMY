@@ -1,12 +1,11 @@
 from langchain_ollama import ChatOllama
-from langchain_core.chat_history import InMemoryChatMessageHistory
-from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain import agents
 from .tools.all_tools import tools
 from pathlib import Path
+from .core.config import config
+from langgraph.checkpoint.memory import MemorySaver
 
 BASE_PATH = Path(__file__).resolve().parent
-SYSTEM_PROMPT_PATH = "prompts/system.md"
 
 def create_agent():
     llm = ChatOllama(
@@ -14,29 +13,20 @@ def create_agent():
         temperature=0.2
     )
 
-    with open(BASE_PATH / SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
+    if config.DOFBOT:
+        prompt_path = "prompts/system_dofbot.md"
+    else:
+        prompt_path = "prompts/system_pybullet.md"
+
+    with open(BASE_PATH / prompt_path, "r", encoding="utf-8") as f:
         system_propmt = f.read()
 
+    # MemorySaver를 checkpointer로 등록하여 에이전트 생성
     agent = agents.create_agent(
         model=llm,
         tools=tools,
-        system_prompt=system_propmt
+        system_prompt=system_propmt,
+        checkpointer=MemorySaver()
     )
 
-
-    store = {}
-
-    def get_session_history(session_id: str):
-        if session_id not in store:
-            store[session_id] = InMemoryChatMessageHistory()
-        return store[session_id]
-
-    agent_with_memory = RunnableWithMessageHistory(
-        agent,
-        get_session_history,
-        input_messages_key="messages",
-        history_messages_key="history"
-    )
-
-
-    return agent_with_memory
+    return agent

@@ -10,7 +10,7 @@ from langchain.messages import AIMessage
 agent = create_agent()
 
 config = {
-    "configurable": {"session_id": "user1"}
+    "configurable": {"thread_id": "user1"}
 }
 
 while True:
@@ -29,5 +29,8 @@ while True:
     #         print(f"{ai_attr[0]} : {ai_attr[1]}")
 
     # Stream 방식 출력
-    for chunk in agent.stream(message, config=config):
-        print(chunk)
+    try:
+        for chunk in agent.stream(message, config=config):
+            print(chunk)
+    except Exception as e:
+        print(f"\n[에러 발생] 에이전트 처리에 실패했습니다. (API 서버가 켜져 있는지 확인하세요): {e}\n")
