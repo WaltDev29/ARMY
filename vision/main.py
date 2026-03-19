@@ -1,4 +1,3 @@
-from app import create_app, t
 import uvicorn
 import os
 from dotenv import load_dotenv
@@ -12,12 +11,17 @@ DEBUG = os.getenv("VISION_DEBUG").lower() == "true"
 
 
 
-app = create_app()
+if os.getenv("REALSENSE").lower() == "true":
+    import realsense_app as app
+else:
+    import app
+
+app = app.create_app()
 
 
 if __name__ == "__main__":
     if DEBUG:
-        t.start()
+        app.t.start()
 
     uvicorn.run(
         "main:app",
