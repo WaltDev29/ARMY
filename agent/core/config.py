@@ -14,6 +14,8 @@ class Config(BaseModel):
     VISION_URL:str = os.getenv("VISION_URL")
     BOT_URL:str = os.getenv("BOT_URL")
     DOFBOT:bool = str(os.getenv("DOFBOT", "False")).lower() == "true"
+    LLM_MODEL:str = os.getenv("LLM_MODEL")
+    LLM_BASE_URL:str = os.getenv("LLM_BASE_URL")
 
 config = Config()
 
