@@ -22,6 +22,7 @@ def init_camera():
     # 640x480 해상도, 30fps로 Depth와 Color 스트림 설정
     config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
     config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+    config.enable_stream(rs.stream.accel)
     
     # 설정 적용 및 파이프라인 시작
     pipeline.start(config)
@@ -150,14 +151,34 @@ def get_intrinsics():
         profile = pipeline.get_active_profile()
         color_stream = profile.get_stream(rs.stream.color)
         intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
+
+        # ====== 각도 계산 ======
+        frames = pipeline.wait_for_frames()
+        accel = frames.first_or_default(rs.stream.accel)
+
+        pitch = 0.0
+        roll = 0.0
+
+        if accel:
+            data = accel.as_motion_frame().get_motion_data()
+
+            ax, ay, az = data.x, data.y, data.z
+
+            pitch = np.arctan2(-ax, np.sqrt(ay*ay + az*az)) * 180/np.pi
+            roll  = np.arctan2(ay, az) * 180/np.pi
+
+
         return {
             "width": intrinsics.width,
             "height": intrinsics.height,
             "ppx": intrinsics.ppx,
             "ppy": intrinsics.ppy,
             "fx": intrinsics.fx,
-            "fy": intrinsics.fy
+            "fy": intrinsics.fy,
+            "pitch": pitch,
+            "roll" : roll
         }
     except Exception as e:
         print(f"Error getting intrinsics: {e}")
         return None
+    
