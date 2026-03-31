@@ -8,6 +8,9 @@ from ..vision.convert_pos import _pixel_to_camera, _camera_to_world
 
 
 # ============ GET ============
+class GetImageCmd(BaseModel):
+    pass
+
 def get_image() -> bytes:
     resp = requests.get(f"{config.BOT_URL}/image")
     resp.raise_for_status()
@@ -18,7 +21,8 @@ get_image_tool = tool(
     get_image,
     description="""
     카메라에서 이미지를 반환받습니다.
-    """
+    """,
+    args_schema=GetImageCmd
 )
 
 
@@ -34,22 +38,17 @@ def get_robot_state() -> dict[str, Any]:
     return resp.json()
 
 
+class GetRobotStateCmd(BaseModel):
+    pass
+
 get_robot_state_tool = tool(
     get_robot_state,
-    description="""
-    # 로봇팔의 현재 상태를 반환합니다.
-
-    ## 반환값 형식
-    {"ee": ee, "joints": joints}
-
-    ## 반환값 설명
-    1. ee : 로봇팔의 손(그리퍼) 끝 위치
-        - 반환값은 {'x': float, 'y': float, 'z': float} 형식의 딕셔너리입니다.
-        - 단위는 미터(m)입니다.
-    2. 로봇팔의 현재 관절 각도
-        - 각 관절의 각도(deg)를 나타낸 리스트입니다.
-        - 예시: [0.0, 1.57, -1.57, 0.0, 1.57, 0.0]
-    """
+    description=(
+        "로봇팔의 현재 상태를 반환합니다. "
+        "반환값: ee(손끝 위치, 단위 m, {'x':float,'y':float,'z':float}), "
+        "joints(각 관절 각도 deg 리스트, 예: [0.0, 1.57, -1.57, 0.0, 1.57, 0.0])"
+    ),
+    args_schema=GetRobotStateCmd
 )
 
 
@@ -60,23 +59,17 @@ def get_object_state() -> dict[str, Any]:
     return resp.json()
 
 
+class GetObjectStateCmd(BaseModel):
+    pass
+
 get_object_state_tool = tool(
     get_object_state,
-    description="""
-    # 오브젝트의 정보를 반환합니다.
-
-    ## 반환값 형식
-    object : {
-        "exists": bool,
-        "x": float, "y": float, "z": float,
-        "distance": float
-    }
-
-    ## 반환값 설명
-    exists : 오브젝트의 존재 여부
-    x, y, z : 오브젝트의 위치 좌표
-    distance : 카메라에서 오브젝트까지의 직선 거리
-    """
+    description=(
+        "씬에 있는 오브젝트의 현재 정보를 반환합니다. "
+        "반환값: exists(존재 여부 bool), x/y/z(월드 좌표 float), "
+        "distance(카메라에서 오브젝트까지의 직선 거리 float)"
+    ),
+    args_schema=GetObjectStateCmd
 )
 
 
@@ -140,20 +133,6 @@ set_gripper_tool = tool(
     """,
     args_schema=SetGripperCmd
 )
-
-
-
-# ============ Robot 힘, 속도 제어 (DOFBot에 미구현) ============
-def set_force(force: float) -> Dict[str, Any]:
-    resp = requests.post(f"{config.BOT_URL}/force", json={"force": force})
-    resp.raise_for_status()
-    return resp.json()
-
-
-def set_max_velocity(max_vel: float) -> Dict[str, Any]:
-    resp = requests.post(f"{config.BOT_URL}/max_velocity", json={"max_velocity": max_vel})
-    resp.raise_for_status()
-    return resp.json()
 
 
 # ============ yolo로 추론한 오브젝트의 중앙 좌표로 depth 거리 반환 ============
@@ -233,48 +212,9 @@ def _get_object_pos():
 
 
 
-def grab_object():
-    """
-    오브젝트를 탐지하여 로봇팔을 해당 좌표로 이동한 후 그리퍼를 닫습니다.
-    """
-    set_gripper(0.06)
-
-    # ============ Loop ============
-    while True:
-        # ============ GET 오브젝트 정보 ============
-        object_pos = _get_object_pos()
-        if object_pos is None: break
-        object_x, object_y, object_z = object_pos
-        print(f"object_pos : [{object_x}, {object_y}, {object_z}]")
-
-        # 오브젝트 위치 && 로봇 위치 비교
-        robot_state = get_robot_state()
-        if not abs(robot_state.get("ee")["x"] - object_x) >= 0.03 and not abs(robot_state.get("ee")["y"] - object_y) >= 0.03 and not abs(robot_state.get("ee")["z"] - object_z) >= 0.03: break
-        print(f"robot_pos : [{robot_state.get('ee')['x']}, {robot_state.get('ee')['y']}, {robot_state.get('ee')['z']}]")
-
-        # 로봇 이동 명령
-        robot_resp = set_pos([object_x, object_y, object_z])
-        if not robot_resp.get("ok"): return False
-
-    # ============ 그리퍼 닫기 ============
-    set_gripper(0.0)
-
-    return True
-
-
-grab_object_tool = tool(
-    grab_object,
-    description="""
-    오브젝트의 위치를 파악하여 로봇팔로 오브젝트를 잡습니다.
-    """
-)
-
-
 tools = [
     get_robot_state_tool,
     get_object_state_tool,
     set_pos_tool,
-    # set_joints_tool,
-    set_gripper_tool,
-    grab_object_tool
+    set_gripper_tool
 ]

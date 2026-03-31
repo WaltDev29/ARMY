@@ -5,7 +5,48 @@ Pybullet 제어 Tool을 가진 Agent 개발
 
 
 from agent import create_agent
-from langchain.messages import AIMessage
+from langchain.messages import HumanMessage
+
+
+# ============ 출력용 파싱 함수 ============
+def pretty_print(chunk):
+    # 📌 Planner
+    if "planner" in chunk:
+        plan = chunk["planner"].get("plan", "")
+        print(f"\n📌 Plan: {plan}")
+
+    # 🤖 Executor
+    if "excutor" in chunk:
+        messages = chunk["excutor"].get("messages", [])
+        if not messages:
+            return 
+        
+        msg = messages[-1]
+
+        # content 출력
+        print(f"\n🤖 Execute: {msg.content}")
+
+        # tool_calls 출력
+        tool_calls = getattr(msg, "tool_calls", [])
+        if tool_calls:
+            print("    🔧 Tool Calls:")
+            for tc in tool_calls:
+                name = tc.get("name")
+                args = tc.get("args")
+
+                # args 이상하게 깨지는 경우 대비
+                try:
+                    print(f"       - {name}({args})")
+                except:
+                    print(f"       - {name}(args 파싱 실패)")
+
+    # 🛠 Tools 실행 결과
+    if "tools" in chunk:
+        messages = chunk["tools"].get("messages", [])
+        for msg in messages:
+            print(f"🛠 Tool Result [{msg.name}]: {msg.content}")
+
+
 
 agent = create_agent()
 
@@ -14,23 +55,7 @@ config = {
 }
 
 while True:
-    topic = input("입력 : ")
-    if not topic: continue
-    if topic.strip().lower() == 'q': break
+    msg = input("메시지 입력 : ")
 
-    message = {"messages": [{"role": "user", "content": topic}]}
-    
-    response = agent.invoke(message, config=config)
-    ai_messages = [m for m in response["messages"] if isinstance(m, AIMessage)]
-
-    for ai_objs in ai_messages:
-        print("\n\n============ AI Response ============")
-        for ai_attr in ai_objs:
-            print(f"{ai_attr[0]} : {ai_attr[1]}")
-
-    # Stream 방식 출력
-    # try:
-    #     for chunk in agent.stream(message, config=config):
-    #         print(chunk)
-    # except Exception as e:
-    #     print(f"\n[에러 발생] 에이전트 처리에 실패했습니다. (API 서버가 켜져 있는지 확인하세요): {e}\n")
+    for chunk in agent.stream({"messages": [HumanMessage(content=msg)]}, config=config, stream_mode="updates"):
+        pretty_print(chunk)
