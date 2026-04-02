@@ -133,36 +133,28 @@ def get_intrinsics():
 # ============ 웹 스트리밍을 위한 프레임 제너레이터 ============
 def generate_frames():
     """웹 스트리밍을 위한 프레임 제너레이터"""
-    from .yolo_detect import detect_objects
+    from .convert_pos import get_world_coordinates
+    import cv2
     
     while True:
-        frame = get_rgb_image()
-        if frame is None:
-            continue
+        try:
+            # 기존 컬러 프레임 로직 대신 convert_pos에 통합된 추론 및 드로잉 결과를 바로 가져옵니다
+            world_objects, frame = get_world_coordinates(return_image=True)
+            
+            if frame is None:
+                continue
 
-        # YOLO object detection을 수행하고 바운딩 박스를 그립니다.
-        detections = detect_objects(frame)
-        for obj in detections:
-            x, y, w, h = obj.get("xywh", [0,0,0,0])
-            class_name = obj.get("class_name", "")
+            ret, jpeg = cv2.imencode('.jpg', frame)
+            if not ret:
+                continue
 
-            # xywh는 중심좌표 + w,h이므로, 좌상단 우하단으로 변환
-            x1 = int(x - w / 2)
-            y1 = int(y - h / 2)
-            x2 = int(x + w / 2)
-            y2 = int(y + h / 2)
-
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, class_name, (x1, max(y1 - 5, 0)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
-        ret, jpeg = cv2.imencode('.jpg', frame)
-        if not ret:
-            continue
-
-        frame_bytes = jpeg.tobytes()
-        yield (b'--frame\r\n'
-            b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            frame_bytes = jpeg.tobytes()
+            yield (b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                
+        except Exception as e:
+            print(f"Stream error: {e}")
+            break
 
 
 
