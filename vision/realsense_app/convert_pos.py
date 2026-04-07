@@ -5,7 +5,7 @@ from .camera import get_intrinsics, get_aligned_frames
 from .yolo_detect import detect_objects
 
 CAMERA_POS = [0.70, 0.0, 0.55]  # Fallback: 로봇 월드 좌표계 기준 카메라의 렌즈 위치 (X, Y, Z)
-BASE_POS = 0.0 # 마커 기준 로봇 베이스 위치
+BASE_POS = 0.10 # 마커 기준 로봇 베이스 위치
 
 # 추적 안정화(Ambiguity Flip 방지)를 위한 이전 프레임 상태 저장
 _prev_rvec = None
@@ -14,7 +14,7 @@ _prev_rvec = None
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
 detector = aruco.ArucoDetector(aruco_dict)
 
-marker_length = 0.03  # 3cm
+marker_length = 0.04  # 4cm
 half = marker_length / 2
 obj_points = np.array([
     [-half,  half, 0],
@@ -133,38 +133,49 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
         # 우선 첫 번째 인식된 마커를 원점 기준으로 삼습니다
         img_points = corners[0][0]
         
-        # [Z축 뒤집힘 방지] 평면 마커의 모호성(Ambiguity)을 해결하기 위해 다중 해를 구합니다.
+        # [Z축 무조건 양수(바른 방향) 고정 로직]
         try:
             success, rvecs, tvecs, _ = cv2.solvePnPGeneric(obj_points, img_points, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if success and len(rvecs) > 0:
-                rvec, tvec = rvecs[0], tvecs[0]
+                # 1. 물리적으로 불가능한 자세(마커 뒷면 보기)를 무조건 폐기합니다.
+                valid_solutions = []
+                for rv, tv in zip(rvecs, tvecs):
+                    R_test, _ = cv2.Rodrigues(rv)
+                    # 카메라 시선(tv)과 마커 법선(Z축) 내적이 음수여야 마커가 위(카메라 방향)를 보는 것입니다.
+                    if np.dot(tv.flatten(), R_test[:, 2]) < 0:
+                        valid_solutions.append((rv, tv))
                 
-                if len(rvecs) > 1:
-                    if _prev_rvec is not None:
-                        # 통계적으로 가장 확실한 제어: 이전 프레임의 자세와 동일/유사한 해답을 선택
-                        dist0 = min(np.linalg.norm(rvecs[0] - _prev_rvec), np.linalg.norm(rvecs[0] + _prev_rvec))
-                        dist1 = min(np.linalg.norm(rvecs[1] - _prev_rvec), np.linalg.norm(rvecs[1] + _prev_rvec))
-                        
+                if len(valid_solutions) == 0:
+                    success = False
+                else:
+                    rvec, tvec = valid_solutions[0]
+                    
+                    # 2. 올바른 해답이 여러 개면 이전 프레임과 가장 가까운 안정적 자세 선택
+                    if len(valid_solutions) > 1 and _prev_rvec is not None:
+                        rv0, tv0 = valid_solutions[0]
+                        rv1, tv1 = valid_solutions[1]
+                        dist0 = min(np.linalg.norm(rv0 - _prev_rvec), np.linalg.norm(rv0 + _prev_rvec))
+                        dist1 = min(np.linalg.norm(rv1 - _prev_rvec), np.linalg.norm(rv1 + _prev_rvec))
                         if dist1 < dist0:
-                            rvec, tvec = rvecs[1], tvecs[1]
-                    else:
-                        # 초기 인식 시: 카메라와 Z축이 마주보는 방향을 우선 선택
-                        R_0, _ = cv2.Rodrigues(rvecs[0])
-                        R_1, _ = cv2.Rodrigues(rvecs[1])
-                        if np.dot(tvecs[0].flatten(), R_0[:, 2]) > 0 and np.dot(tvecs[1].flatten(), R_1[:, 2]) < 0:
-                            rvec, tvec = rvecs[1], tvecs[1]
-                
-                # 부호 동일화(Rodrigues 회전 벡터 특성 보정) 후 저장
-                if _prev_rvec is not None and np.linalg.norm(rvec + _prev_rvec) < np.linalg.norm(rvec - _prev_rvec):
-                    rvec = -rvec
-                _prev_rvec = rvec.copy()
-                        
-                R_cm, _ = cv2.Rodrigues(rvec)
+                            rvec, tvec = rv1, tv1
+                    
+                    # 부호 동일화(Rodrigues 회전 벡터 특성 보정) 후 저장
+                    if _prev_rvec is not None and np.linalg.norm(rvec + _prev_rvec) < np.linalg.norm(rvec - _prev_rvec):
+                        rvec = -rvec
+                    _prev_rvec = rvec.copy()
+                            
+                    R_cm, _ = cv2.Rodrigues(rvec)
             else:
                 success = False
         except AttributeError:
             success, rvec, tvec = cv2.solvePnP(obj_points, img_points, K, dist)
             if success:
+                R_cm, _ = cv2.Rodrigues(rvec)
+                # 무조건 Z축이 위를 보도록 강제
+                if np.dot(tvec.flatten(), R_cm[:, 2]) >= 0:
+                    R_cm = R_cm @ np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], dtype=np.float32)
+                    rvec, _ = cv2.Rodrigues(R_cm)
+                    
                 if _prev_rvec is not None and np.linalg.norm(rvec + _prev_rvec) < np.linalg.norm(rvec - _prev_rvec):
                     rvec = -rvec
                 _prev_rvec = rvec.copy()
@@ -172,10 +183,10 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
 
         if success:
             
-            # [원점 보정] X좌표 값으로 2cm 뒤를 새로운 원점(0,0,0)으로 설정
+            # [원점 보정] X좌표 값으로 10cm 뒤를 새로운 원점(0,0,0)으로 설정
             # World의 X(앞/뒤) = Marker의 -Y 에 해당합니다.
-            # World X축으로 -2cm(-0.02m) 이동한 위치가 새 원점이 되려면,
-            # Marker 기준으로는 Y축 방향으로 +0.02m 이동해야 합니다.
+            # World X축으로 -10cm(-0.10m) 이동한 위치가 새 원점이 되려면,
+            # Marker 기준으로는 Y축 방향으로 +0.10m 이동해야 합니다.
             offset_marker = np.array([[0.0], [BASE_POS], [0.0]], dtype=np.float32)
             t_cm_new = R_cm @ offset_marker + tvec
             
