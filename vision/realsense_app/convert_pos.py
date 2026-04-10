@@ -5,14 +5,27 @@ from .camera import get_intrinsics, get_aligned_frames
 from .yolo_detect import detect_objects
 
 CAMERA_POS = [0.70, 0.0, 0.55]  # Fallback: 로봇 월드 좌표계 기준 카메라의 렌즈 위치 (X, Y, Z)
-BASE_POS = 0.02 # 마커 기준 로봇 베이스 위치
+BASE_POS = -0.10 # 마커 기준 로봇 베이스 위치
+MARKER_SIZE = 0.04
+
+# 추적 안정화(Ambiguity Flip 방지)를 위한 이전 프레임 상태 저장
+_prev_rvec = None
 
 # ============ ArUco 마커 초기화 ============
-aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
-detector = aruco.ArucoDetector(aruco_dict)
+# OpenCV 버전 호환성 대응
+if hasattr(cv2.aruco, 'getPredefinedDictionary'):
+    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    aruco_params = cv2.aruco.DetectorParameters()
+    detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
+    use_detector = True
+else:
+    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
+    aruco_params = cv2.aruco.DetectorParameters_create()
+    use_detector = False
 
-marker_length = 0.04  # 4cm
-half = marker_length / 2
+half = MARKER_SIZE / 2
+
+# test_realsense_aruco.py 와 동일한 마커 3D 좌표 기준 사용
 obj_points = np.array([
     [-half,  half, 0],
     [ half,  half, 0],
@@ -21,12 +34,12 @@ obj_points = np.array([
 ], dtype=np.float32)
 
 def draw_custom_axes(img, K, dist, rvec, tvec, length):
-    # 빨간색(X)을 원래 방향(오른쪽)으로 되돌리고, 초록색(Y)은 반대 방향을 유지합니다.
+    # X축(빨강)만 반대 방향(-X)으로 표시, Y(초록)와 Z(파랑)는 그대로 유지
     pts = np.array([
         [0, 0, 0],
-        [length, 0, 0],   # 빨강 (반대 방향 뒤집기 -> 오른쪽)
-        [0, -length, 0],  # 초록 (반대 방향)
-        [0, 0, length]    # 파랑 (유지)
+        [-length, 0, 0],   # 빨강 (-X 방향)
+        [0, length, 0],    # 초록 (+Y 방향)
+        [0, 0, length]     # 파랑 (+Z 방향)
     ], dtype=np.float32)
 
     imgpts, _ = cv2.projectPoints(pts, rvec, tvec, K, dist)
@@ -37,9 +50,11 @@ def draw_custom_axes(img, K, dist, rvec, tvec, length):
     pt_y = tuple(imgpts[2])
     pt_z = tuple(imgpts[3])
 
-    cv2.line(img, origin, pt_x, (0, 0, 255), 2) # 빨강
-    cv2.line(img, origin, pt_y, (0, 255, 0), 2) # 초록
-    cv2.line(img, origin, pt_z, (255, 0, 0), 2) # 파랑
+    thickness = 2 # 선의 굵기를 반으로 줄임
+    cv2.line(img, origin, pt_x, (0, 0, 255), thickness) # 빨강
+    cv2.line(img, origin, pt_y, (0, 255, 0), thickness) # 초록
+    cv2.line(img, origin, pt_z, (255, 0, 0), thickness) # 파랑
+
 
 
 # ============ 1. 카메라 픽셀, 깊이 및 RGB 가져오기 ============
@@ -94,6 +109,8 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
     마커가 감지되지 않으면 IMU와 camera_pos를 사용하는 Fallback 모드로 동작합니다.
     return_image=True 설정 시, 시각화 마커와 좌표값이 합성된 이미지가 함께 반환됩니다.
     """
+    global _prev_rvec
+    
     objects, rgb_image = _get_object_pos(target_class)
     if rgb_image is None:
         if return_image: return [], None
@@ -122,19 +139,35 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
     t_cm = None
     
     gray = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
-    corners, ids, _ = detector.detectMarkers(gray)
+    
+    if use_detector:
+        corners, ids, _ = detector.detectMarkers(gray)
+    else:
+        corners, ids, _ = aruco.detectMarkers(gray, aruco_dict, parameters=aruco_params)
     
     if ids is not None and len(ids) > 0:
-        # 우선 첫 번째 인식된 마커를 원점 기준으로 삼습니다
+        # 우선 첫 번째 인식된 마커를 기반으로 처리
         img_points = corners[0][0]
+        
+        # test_realsense_aruco.py 와 같이 단순 solvePnP 사용
         success, rvec, tvec = cv2.solvePnP(obj_points, img_points, K, dist)
+        
         if success:
             R_cm, _ = cv2.Rodrigues(rvec)
             
-            # [원점 보정] X좌표 값으로 2cm 뒤를 새로운 원점(0,0,0)으로 설정
-            # World의 X(앞/뒤) = Marker의 -Y 에 해당합니다.
-            # World X축으로 -2cm(-0.02m) 이동한 위치가 새 원점이 되려면,
-            # Marker 기준으로는 Y축 방향으로 +0.02m 이동해야 합니다.
+            # 무조건 Z축이 수직 위(카메라를 향하는 방향)로 오도록 강제 플립
+            # 카메라에서 마커로의 시선 벡터(tvec)와 마커의 Z축(R_cm[:, 2]) 내적이 양수면 Z축이 바닥을 뚫는 상태임
+            if np.dot(tvec.flatten(), R_cm[:, 2]) > 0:
+                # X축을 기준으로 180도 회전하여 Y축과 Z축의 방향을 뒤집음
+                R_cm = R_cm @ np.array([[1, 0, 0], 
+                                        [0, -1, 0], 
+                                        [0, 0, -1]], dtype=np.float32)
+                rvec, _ = cv2.Rodrigues(R_cm)
+            
+            # [원점 보정] BASE_POS(10cm 등)를 새로운 원점으로 설정하기 위한 오프셋 변환
+            # 모델링한 좌표계에서 베이스로 이동하기 위해 (Offset 추가)
+            # 여기서는 월드의 x,y,z 스펙에 따라 오프셋 위치가 달라질 수 있으므로 기존 위치를 유지하나
+            # y축 보정 등은 마커의 축에 따름 (기존 로직: 10cm 오프셋)
             offset_marker = np.array([[0.0], [BASE_POS], [0.0]], dtype=np.float32)
             t_cm_new = R_cm @ offset_marker + tvec
             
@@ -142,7 +175,9 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
             use_marker = True
             
             if return_image:
-                draw_custom_axes(rgb_image, K, dist, rvec, t_cm, 0.05)
+                aruco.drawDetectedMarkers(rgb_image, corners, ids)
+                # X축 반전, 굵기 반감, 길이 연장을 위한 커스텀 함수 호출
+                draw_custom_axes(rgb_image, K, dist, rvec, t_cm, MARKER_SIZE * 1.5)
 
     # Fallback 로직용 변수
     R_imu = None
@@ -189,9 +224,13 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
                 
                 mx, my, mz = P_marker.flatten()
                 
-                p_world_x = -my  # X: 앞 (Marker's -Y)
-                p_world_y = mx   # Y: 반전 적용 (Marker's X)
-                p_world_z = mz   # Z: 상 (Marker's Z)
+                # test 스크립트 좌표계 방식(cv2 표준)으로 객체 좌표 도출
+                # X: Red(Right/Left), Y: Green(Up/Down), Z: Blue(Outward)
+                # 따라서 로봇 좌표계 변환 방식도 이 축에 기반하여 재설정합니다.
+                
+                p_world_x = my   # 앞/뒤 (사용자의 로봇 축 사양에 맞게 조정)
+                p_world_y = -mx  # 좌/우
+                p_world_z = mz   # 상/하
                 
             else: # Fallback
                 x_base = z_cam    
@@ -210,9 +249,9 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
 
             world_objects.append({
                 "class_name": obj["class_name"],
-                "world_x": p_world_x, 
-                "world_y": p_world_y, 
-                "world_z": p_world_z  
+                "world_x": round(p_world_x, 4), 
+                "world_y": round(p_world_y, 4), 
+                "world_z": round(p_world_z, 4)  
             })
             
             if return_image:
@@ -227,7 +266,7 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
                 
                 # Info Text
                 text1 = f"{obj['class_name']}"
-                text2 = f"X:{p_world_x:.2f} Y:{p_world_y:.2f} Z:{p_world_z:.2f}"
+                text2 = f"X:{p_world_x:.3f} Y:{p_world_y:.3f} Z:{p_world_z:.3f}"
                 cv2.putText(rgb_image, text1, (x1, max(y1 - 22, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 cv2.putText(rgb_image, text2, (x1, max(y1 - 5, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
