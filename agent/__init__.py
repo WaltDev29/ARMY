@@ -1,10 +1,19 @@
+from pathlib import Path
 from langchain_openai import ChatOpenAI
+from langchain.messages import SystemMessage
 from .tools.all_tools import tools
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.graph import StateGraph, START, add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from typing import Annotated, TypedDict
 from .core.config import config
+
+
+def _load_system_prompt() -> str:
+    prompt_path = Path(__file__).resolve().parent / "prompts" / "system_dofbot.md"
+    if not prompt_path.exists():
+        return ""
+    return prompt_path.read_text(encoding="utf-8")
 
 
 def create_agent():
@@ -26,6 +35,10 @@ def create_agent():
     # ============ Memory 정의 ============
     memory = MemorySaver()
 
+    # ============ 시스템 프롬프트 로드 ============
+    system_prompt_text = _load_system_prompt()
+    system_message = SystemMessage(content=system_prompt_text) if system_prompt_text else None
+
     # ============ Tool 등록 ============
     llm_with_tools = llm.bind_tools(tools)
 
@@ -45,6 +58,8 @@ def create_agent():
     # Excutor
     def excutor(state:MyState):
         message = state["messages"]
+        if system_message:
+            message = [system_message] + message
         res = llm_with_tools.invoke(message)
         print("excutor : ", res.content, "\n")
         return {"messages": [res]}
