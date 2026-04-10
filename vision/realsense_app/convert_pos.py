@@ -149,8 +149,8 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
         # 우선 첫 번째 인식된 마커를 기반으로 처리
         img_points = corners[0][0]
         
-        # test_realsense_aruco.py 와 같이 단순 solvePnP 사용
-        success, rvec, tvec = cv2.solvePnP(obj_points, img_points, K, dist)
+        # 90도 꺾임(Local Minima) 방지를 위해 평면 마커 전용 알고리즘(IPPE_SQUARE) 사용
+        success, rvec, tvec = cv2.solvePnP(obj_points, img_points, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE)
         
         if success:
             R_cm, _ = cv2.Rodrigues(rvec)
@@ -175,7 +175,7 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
             use_marker = True
             
             if return_image:
-                aruco.drawDetectedMarkers(rgb_image, corners, ids)
+                aruco.drawDetectedMarkers(rgb_image, corners, None)
                 # X축 반전, 굵기 반감, 길이 연장을 위한 커스텀 함수 호출
                 draw_custom_axes(rgb_image, K, dist, rvec, t_cm, MARKER_SIZE * 1.5)
 
