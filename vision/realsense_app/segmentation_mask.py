@@ -42,30 +42,57 @@ class SegmentationManager:
             )
 
             # 결과 리스트에서 각 박스에 대응하는 마스크 추출
-            if results:
-                import cv2
-                kernel = np.ones((3, 3), np.uint8) # 침식용 커널 (크기가 클수록 더 많이 깎임)
-
-                for res in results:
-                    if hasattr(res, 'masks') and res.masks is not None:
-                        # res.masks.data는 [N, H, W] 형태
-                        all_masks_data = res.masks.data.cpu().numpy().astype(np.uint8)
-                        for i in range(len(all_masks_data)):
-                            # 마스크 침식(Erosion): 경계선의 불안정한 떨림 제거
-                            eroded = cv2.erode(all_masks_data[i], kernel, iterations=1)
-                            masks.append(eroded.astype(bool))
+            if results and len(results) > 0:
+                res = results[0]
+                if hasattr(res, 'masks') and res.masks is not None:
+                    import cv2
+                    kernel = np.ones((3, 3), np.uint8) # 침식용 커널
+                    
+                    pred_masks = res.masks.data.cpu().numpy().astype(np.uint8)
+                    
+                    # FastSAM이 반환한 결과(res.boxes)의 순서가 입력 bboxes와 다를 수 있으므로,
+                    # 각 입력 바운딩 박스 중심과의 거리를 비교하여 올바른 마스크를 1:1 매칭합니다.
+                    if hasattr(res, 'boxes') and res.boxes is not None:
+                        pred_boxes = res.boxes.xyxy.cpu().numpy()
+                        
+                        for input_box in bboxes:
+                            cx1 = (input_box[0] + input_box[2]) / 2
+                            cy1 = (input_box[1] + input_box[3]) / 2
+                            
+                            best_idx = 0
+                            min_dist = float('inf')
+                            
+                            for j, p_box in enumerate(pred_boxes):
+                                cx2 = (p_box[0] + p_box[2]) / 2
+                                cy2 = (p_box[1] + p_box[3]) / 2
+                                dist = (cx1 - cx2)**2 + (cy1 - cy2)**2
+                                if dist < min_dist:
+                                    min_dist = dist
+                                    best_idx = j
+                            
+                            # 매칭된 마스크 추출 및 침식
+                            if best_idx < len(pred_masks):
+                                eroded = cv2.erode(pred_masks[best_idx], kernel, iterations=1)
+                                masks.append(eroded.astype(bool))
+                            else:
+                                masks.append(None)
                     else:
-                        masks.extend([None] * len(bboxes))
-            
-            # 반환 리스트 크기 최종 확인 및 보정
-            if len(masks) > len(bboxes):
-                masks = masks[:len(bboxes)]
-            while len(masks) < len(bboxes):
-                masks.append(None)
+                        # Fallback: pred_boxes가 없을 경우 단순 인덱스 접근 (비상용)
+                        for i in range(len(bboxes)):
+                            if i < len(pred_masks):
+                                eroded = cv2.erode(pred_masks[i], kernel, iterations=1)
+                                masks.append(eroded.astype(bool))
+                            else:
+                                masks.append(None)
+                else:
+                    masks = [None] * len(bboxes)
+            else:
+                masks = [None] * len(bboxes)
 
         except Exception as e:
-            logger.warning(f"마스크 추출 중 오류 발생: {e}")
+            logger.warning(f"마스크 맵핑 중 오류 발생: {e}")
             masks = [None] * len(bboxes)
+
 
         return masks
 
