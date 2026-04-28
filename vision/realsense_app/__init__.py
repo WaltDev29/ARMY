@@ -1,9 +1,15 @@
+from typing import List
+from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, StreamingResponse
-from .camera import stop_camera, get_intrinsics, generate_frames, get_detection_data
+from .camera import stop_camera, get_intrinsics, generate_frames, get_detection_data, set_current_targets, get_current_targets
 from .debug import start_debug_stream
 from .schemas import ResponseBase, Intrinsics
 from .convert_pos import get_objects_world_pos
+
+class TargetRequest(BaseModel):
+    targets: List[str]
+
 
 import os
 from dotenv import load_dotenv
@@ -26,7 +32,21 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     def root():
-        return "RealSense is running."
+        import os
+        html_path = os.path.join(os.path.dirname(__file__), "index.html")
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+
+    @app.post("/targets", summary="Set Multiple Targets", description="탐지할 대상 목록을 문자열 배열 형태로 지정합니다.")
+    def set_targets(request: TargetRequest):
+        set_current_targets(request.targets)
+        return {"status": "success", "targets": request.targets}
+
+    @app.get("/targets", summary="Get Current Targets", description="현재 지정된 대상 목록을 반환합니다.")
+    def get_targets():
+        return {"targets": get_current_targets()}
+
 
 
     if not DEBUG:

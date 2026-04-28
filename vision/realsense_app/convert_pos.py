@@ -2,15 +2,20 @@ import numpy as np
 import cv2
 import cv2.aruco as aruco
 from .camera import get_intrinsics, get_aligned_frames
-from .yolo_detect import detect_objects
+from .detection_manager import detect_objects
+from .segmentation_mask import generate_masks
+import logging
+
+logger = logging.getLogger(__name__)
 
 CAMERA_POS = [0.70, 0.0, 0.55]  # Fallback: 로봇 월드 좌표계 기준 카메라의 렌즈 위치 (X, Y, Z)
-BASE_POS = -0.10 # 마커 기준 로봇 베이스 위치
-MARKER_SIZE = 0.04
+BASE_POS = -0.0 # 마커 기준 로봇 베이스 위치
+MARKER_SIZE = 0.03
 
-# 거리 비례 오차 보정을 위한 계수 (실험을 통해 조정 가능)
-# 실제보다 높게 측정될 경우 1.0보다 작은 값을 사용합니다.
-Z_SCALING_FACTOR = 0.95
+# 떨림 방지 및 정밀도 향상을 위한 설정
+Z_SCALING_FACTOR = 1.0     # 거리 비례 오차 보정
+HISTORY_SIZE = 5            # 이동 평균 필터 크기 (클수록 부드럽지만 반응이 느려짐)
+_object_history = {}        # { "class_name": [ (x, y, z), ... ] }
 
 # ============ ArUco 마커 초기화 ============
 # OpenCV 버전 호환성 대응
@@ -62,7 +67,7 @@ def draw_custom_axes(img, K, dist, rvec, tvec, length):
 
 
 # ============ 1. 카메라 픽셀, 깊이 및 RGB 가져오기 ============
-def _get_object_pos(target_class=None):
+def _get_object_pos(target_classes=None):
     aligned_frames = get_aligned_frames()
     color_frame = aligned_frames.get_color_frame()
     depth_frame = aligned_frames.get_depth_frame()
@@ -73,43 +78,77 @@ def _get_object_pos(target_class=None):
 
     rgb_image = np.asanyarray(color_frame.get_data())
     depth_data = np.asanyarray(depth_frame.get_data())
-    
-    detected_objects = detect_objects(rgb_image)
-
-    valid_objects = []
     height, width = depth_data.shape
     
-    if target_class:
-        detected_objects = [obj for obj in detected_objects if obj["class_name"] == target_class]
+    # 1. 1차 시도: 표준 YOLOv11 (상시 모델)
+    detected_objects = detect_objects(rgb_image)
+    
+    # target_classes가 지정된 경우 필터링 및 Fallback 체크
+    if target_classes:
+        # 대소문자 무시를 위해 클리닝
+        cleaned_targets = [t.lower().strip() for t in target_classes]
         
-    for obj in detected_objects:
+        # 표준 모델에서 잡힌 타겟들
+        standard_filtered = [obj for obj in detected_objects if obj["class_name"].lower().strip() in cleaned_targets]
+        
+        # 여전히 못 찾은 타겟(Missing Targets) 골라내기
+        found_classes = {obj["class_name"].lower().strip() for obj in standard_filtered}
+        missing_targets = [t for t in cleaned_targets if t not in found_classes]
+        
+        # 하나라도 못 찾은 게 있다면 YOLO-World (Fallback) 가동
+        if missing_targets:
+            # logger.info(f"YOLO-World 가동 (누락 타겟: {missing_targets})")
+            world_objects = detect_objects(rgb_image, prompt=missing_targets)
+            standard_filtered.extend(world_objects)
+            
+        detected_objects = standard_filtered
+
+    if not detected_objects:
+        return [], rgb_image
+
+    # 2. 탐지된 객체들에 대해 FastSAM 마스크 생성
+    bboxes = [obj["box_corner"] for obj in detected_objects]
+    masks = generate_masks(rgb_image, bboxes)
+
+    valid_objects = []
+    for i, obj in enumerate(detected_objects):
+        mask = masks[i]
         cx, cy, w, h = obj["xywh"]
-        cxi, cyi = int(cx), int(cy)
         
-        if 0 <= cyi < height and 0 <= cxi < width:
-            # 단일 픽셀 대신 5x5 영역의 중앙값(Median)을 사용하여 노이즈 억제
-            window_size = 5
-            hw = window_size // 2
+        # 1. 마스크가 있는 경우: 무게 중심(Centroid) 및 정제된 Depth 계산
+        if mask is not None:
+            # 픽셀 좌표 리스트 추출
+            y_indices, x_indices = np.where(mask)
+            if len(x_indices) > 0:
+                # 바운딩 박스 중심 대신 실제 마스크의 무게 중심 사용
+                cx = float(np.mean(x_indices))
+                cy = float(np.mean(y_indices))
+
+            # 해당 영역 Depth 추출 및 통계적 정제 (상하위 20% Outlier 제거)
+            obj_depths = depth_data[mask]
+            valid_depths = obj_depths[obj_depths > 0]
             
-            # 이미지 경계를 벗어나지 않도록 ROI 설정
-            y_start = max(0, cyi - hw)
-            y_end = min(height, cyi + hw + 1)
-            x_start = max(0, cxi - hw)
-            x_end = min(width, cxi + hw + 1)
-            
-            roi_depth = depth_data[y_start:y_end, x_start:x_end]
-            
-            # 0(측정 실패)을 제외한 유효한 값들만 추출
-            valid_depths = roi_depth[roi_depth > 0]
-            
-            if len(valid_depths) > (window_size * window_size // 2):
-                depth_value = float(np.median(valid_depths))
-            elif len(valid_depths) > 0:
-                depth_value = float(np.min(valid_depths)) # 유효 값이 적으면 가장 가까운 면 선택
+            if len(valid_depths) > 10:
+                sorted_depths = np.sort(valid_depths)
+                n = len(sorted_depths)
+                # 상하위 20%를 잘라내어 노이즈(반사, 그림자 등) 차단
+                clipped_depths = sorted_depths[int(n*0.2):int(n*0.8)]
+                depth_value = float(np.mean(clipped_depths)) if len(clipped_depths) > 0 else float(np.median(valid_depths))
             else:
                 depth_value = 0.0
         else:
-            depth_value = 0.0
+            # 2. 마스크가 없는 경우 (Fallback)
+            cxi, cyi = int(cx), int(cy)
+            if 0 <= cyi < height and 0 <= cxi < width:
+                window_size = 5
+                hw = window_size // 2
+                y_start, y_end = max(0, cyi-hw), min(height, cyi+hw+1)
+                x_start, x_end = max(0, cxi-hw), min(width, cxi+hw+1)
+                roi_depth = depth_data[y_start:y_end, x_start:x_end]
+                valid_depths = roi_depth[roi_depth > 0]
+                depth_value = float(np.median(valid_depths)) if len(valid_depths) > 0 else 0.0
+            else:
+                depth_value = 0.0
 
         if depth_value <= 0:
             continue
@@ -120,21 +159,22 @@ def _get_object_pos(target_class=None):
             "center_y": cy,
             "w": w,
             "h": h,
-            "center_z": depth_value / 1000.0  # 밀리미터 -> 미터 변환
+            "center_z": depth_value / 1000.0,
+            "mask": mask
         })
 
     return valid_objects, rgb_image
 
 
 
-def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), return_image=False):
+def get_world_coordinates(target_classes=None, camera_pos=tuple(CAMERA_POS), return_image=False):
     """
     탐지된 객체의 픽셀 좌표와 Depth를 마커 기준의 월드 좌표계로 변환합니다.
     마커가 감지되지 않으면 IMU와 camera_pos를 사용하는 Fallback 모드로 동작합니다.
     return_image=True 설정 시, 시각화 마커와 좌표값이 합성된 이미지가 함께 반환됩니다.
     """
     
-    objects, rgb_image = _get_object_pos(target_class)
+    objects, rgb_image = _get_object_pos(target_classes)
     if rgb_image is None:
         if return_image: return [], None
         return []
@@ -270,26 +310,48 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
                 p_world_y = p_world[1]  
                 p_world_z = p_world[2]
 
+            # ============ 4. 이동 평균 필터 적용 (떨림 방지) ============
+            cls = obj["class_name"]
+            current_pos = (p_world_x, p_world_y, p_world_z)
+            
+            if cls not in _object_history:
+                _object_history[cls] = []
+            
+            _object_history[cls].append(current_pos)
+            if len(_object_history[cls]) > HISTORY_SIZE:
+                _object_history[cls].pop(0)
+            
+            # 히스토리 내 좌표들의 평균값 계산
+            avg_coords = np.mean(_object_history[cls], axis=0)
+            smooth_x, smooth_y, smooth_z = avg_coords
+            
             world_objects.append({
-                "class_name": obj["class_name"],
-                "world_x": round(p_world_x, 4), 
-                "world_y": round(p_world_y, 4), 
-                "world_z": round(p_world_z, 4)  
+                "class_name": cls,
+                "world_x": round(float(smooth_x), 4), 
+                "world_y": round(float(smooth_y), 4), 
+                "world_z": round(float(smooth_z), 4)  
             })
             
             if return_image:
                 w, h = obj["w"], obj["h"]
-                x1 = int(cx - w / 2)
-                y1 = int(cy - h / 2)
-                x2 = int(cx + w / 2)
-                y2 = int(cy + h / 2)
+                # 시각화 시에는 부드러워진 좌표(smooth_*)를 사용하여 텍스트 표시
+                x1, y1 = int(cx - w / 2), int(cy - h / 2)
+                x2, y2 = int(cx + w / 2), int(cy + h / 2)
                 
                 # Bounding box
                 cv2.rectangle(rgb_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 
+                # Mask Overlay
+                if obj.get("mask") is not None:
+                    mask = obj["mask"]
+                    overlay = rgb_image.copy()
+                    overlay[mask] = (0, 255, 0)
+                    cv2.addWeighted(overlay, 0.3, rgb_image, 0.7, 0, rgb_image)
+
                 # Info Text
-                text1 = f"{obj['class_name']}"
-                text2 = f"X:{p_world_x:.3f} Y:{p_world_y:.3f} Z:{p_world_z:.3f}"
+                text1 = f"{cls}"
+                text2 = f"X:{smooth_x:.3f} Y:{smooth_y:.3f} Z:{smooth_z:.3f}"
+                # ... 텍스트 출력 로직 ...
                 cv2.putText(rgb_image, text1, (x1, max(y1 - 22, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 cv2.putText(rgb_image, text2, (x1, max(y1 - 5, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
@@ -299,5 +361,8 @@ def get_world_coordinates(target_class=None, camera_pos=tuple(CAMERA_POS), retur
     return world_objects
 
 
-def get_objects_world_pos():
-    return get_world_coordinates()
+def get_objects_world_pos(target_classes=None):
+    if target_classes is None:
+        from .camera import get_current_targets
+        target_classes = get_current_targets()
+    return get_world_coordinates(target_classes=target_classes)

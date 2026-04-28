@@ -75,6 +75,6 @@ def start_debug_stream():
 def stop_debug_stream():
     global is_debug_running, debug_thread
     is_debug_running = False
-    if debug_thread is not None:
+    if debug_thread is not None and debug_thread.is_alive():
         debug_thread.join()
         debug_thread = None

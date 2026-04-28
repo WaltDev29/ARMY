@@ -8,6 +8,14 @@ pipeline = None
 config = None
 align = None
 is_streaming = False
+CURRENT_TARGETS = []
+
+def set_current_targets(targets: list):
+    global CURRENT_TARGETS
+    CURRENT_TARGETS = targets
+
+def get_current_targets() -> list:
+    return CURRENT_TARGETS
 
 # ============ Init Camera ============
 def init_camera():
@@ -139,7 +147,7 @@ def generate_frames():
     while True:
         try:
             # 기존 컬러 프레임 로직 대신 convert_pos에 통합된 추론 및 드로잉 결과를 바로 가져옵니다
-            world_objects, frame = get_world_coordinates(return_image=True)
+            world_objects, frame = get_world_coordinates(target_classes=CURRENT_TARGETS, return_image=True)
             
             if frame is None:
                 continue

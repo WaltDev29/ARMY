@@ -1,9 +1,16 @@
 fastapi
 uvicorn
-dotenv
+python-dotenv
 
 opencv-python
-ultralytics
+ultralytics>=8.1.0
+supervision
+ftfy
+regex
 python-multipart
 
 pyrealsense2
+
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch
+torchvision
