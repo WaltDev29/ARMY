@@ -12,10 +12,8 @@ CAMERA_POS = [0.70, 0.0, 0.55]  # Fallback: 로봇 월드 좌표계 기준 카�
 BASE_POS = -0.0 # 마커 기준 로봇 베이스 위치
 MARKER_SIZE = 0.03
 
-# 떨림 방지 및 정밀도 향상을 위한 설정
+# 정밀도 향상을 위한 설정
 Z_SCALING_FACTOR = 1.0     # 거리 비례 오차 보정
-HISTORY_SIZE = 5            # 이동 평균 필터 크기 (클수록 부드럽지만 반응이 느려짐)
-_object_history = {}        # { "class_name": [ (x, y, z), ... ] }
 
 # ============ ArUco 마커 초기화 ============
 # OpenCV 버전 호환성 대응
@@ -310,31 +308,19 @@ def get_world_coordinates(target_classes=None, camera_pos=tuple(CAMERA_POS), ret
                 p_world_y = p_world[1]  
                 p_world_z = p_world[2]
 
-            # ============ 4. 이동 평균 필터 적용 (떨림 방지) ============
+            # ============ 4. 최종 월드 좌표 구성 ============
             cls = obj["class_name"]
-            current_pos = (p_world_x, p_world_y, p_world_z)
-            
-            if cls not in _object_history:
-                _object_history[cls] = []
-            
-            _object_history[cls].append(current_pos)
-            if len(_object_history[cls]) > HISTORY_SIZE:
-                _object_history[cls].pop(0)
-            
-            # 히스토리 내 좌표들의 평균값 계산
-            avg_coords = np.mean(_object_history[cls], axis=0)
-            smooth_x, smooth_y, smooth_z = avg_coords
             
             world_objects.append({
                 "class_name": cls,
-                "world_x": round(float(smooth_x), 4), 
-                "world_y": round(float(smooth_y), 4), 
-                "world_z": round(float(smooth_z), 4)  
+                "world_x": round(float(p_world_x), 4), 
+                "world_y": round(float(p_world_y), 4), 
+                "world_z": round(float(p_world_z), 4)  
             })
             
             if return_image:
                 w, h = obj["w"], obj["h"]
-                # 시각화 시에는 부드러워진 좌표(smooth_*)를 사용하여 텍스트 표시
+                # 시각화 텍스트 표시
                 x1, y1 = int(cx - w / 2), int(cy - h / 2)
                 x2, y2 = int(cx + w / 2), int(cy + h / 2)
                 
@@ -350,7 +336,7 @@ def get_world_coordinates(target_classes=None, camera_pos=tuple(CAMERA_POS), ret
 
                 # Info Text
                 text1 = f"{cls}"
-                text2 = f"X:{smooth_x:.3f} Y:{smooth_y:.3f} Z:{smooth_z:.3f}"
+                text2 = f"X:{p_world_x:.3f} Y:{p_world_y:.3f} Z:{p_world_z:.3f}"
                 # ... 텍스트 출력 로직 ...
                 cv2.putText(rgb_image, text1, (x1, max(y1 - 22, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 cv2.putText(rgb_image, text2, (x1, max(y1 - 5, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
