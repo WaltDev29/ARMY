@@ -17,6 +17,14 @@ def _load_system_prompt() -> str:
 
 
 def create_agent():
+    import logging
+    logger = logging.getLogger("Agent")
+    if not logger.handlers:
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
+        # 불필요한 외부 라이브러리(HTTP 통신 등) INFO 로그 숨기기
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+        
     # ============ State 정의 ============
     class MyState(TypedDict):
         messages: Annotated[list, add_messages]
@@ -52,16 +60,39 @@ def create_agent():
         """
 
         res = llm.invoke(prompt)  # tool 없는 순수 LLM (계획만 생성)
-        print("planner : ", res.content, "\n")
+        logger.info(f"========== [Node: PLANNER] ==========")
+        logger.info(f"[New Plan]:\n{res.content}\n======================================")
         return {"plan": res.content}
 
     # Excutor
     def excutor(state:MyState):
+
+        # 1. 툴 노드에서 돌아온 경우 (방금 실행된 툴의 결과 로깅)
+        last_msg = state["messages"][-1]
+        if last_msg.type == "tool":
+            logger.info(f"[Tool Return] {last_msg.name} => {last_msg.content}")
+
+        # 2. 현재 상태(노드, 계획) 로깅
+        current_plan = state.get("plan", "계획 없음(Plan 미설정)")
+        logger.info(f"========== [Node: EXECUTOR] ==========")
+        logger.info(f"[Current Plan]: {current_plan}")
+
         message = state["messages"]
         if system_message:
             message = [system_message] + message
+        
+        # LLM 추론
         res = llm_with_tools.invoke(message)
-        print("excutor : ", res.content, "\n")
+
+        # 3. LLM 출력 로깅
+        if res.content:
+            logger.info(f"[LLM Output]: {res.content}")
+
+        # 4. 사용할 툴과 파라미터 로깅
+        if hasattr(res, 'tool_calls') and res.tool_calls:
+            for tc in res.tool_calls:
+                logger.info(f"[Tool Call] {tc['name']} | Params: {tc['args']}")
+        
         return {"messages": [res]}
 
     # Tool Node
