@@ -2,7 +2,7 @@ from typing import List
 from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, StreamingResponse
-from .camera import stop_camera, get_intrinsics, generate_frames, get_detection_data, set_current_targets, get_current_targets
+from .camera import stop_camera, get_intrinsics, generate_frames, set_current_targets, get_current_targets
 from .debug import start_debug_stream
 from .schemas import ResponseBase, Intrinsics
 from .convert_pos import get_objects_world_pos
@@ -55,25 +55,6 @@ def create_app() -> FastAPI:
             return StreamingResponse(generate_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
 
 
-
-    @app.get("/detect",
-             summary="Detect",
-             description="""
-             카메라에서 이미지를 받아 depth 데이터와 YOLO 추론 결과를 반환합니다.
-             """,
-             response_model=ResponseBase)
-    async def detect():
-        """
-        카메라에서 이미지를 받아 depth 데이터와 YOLO 추론 결과를 반환합니다.
-        """
-        data = get_detection_data()
-        if isinstance(data, dict) and "error" in data:
-            return data
-            
-        return ResponseBase(
-            status="success",
-            detections=data
-        )
 
     
     @app.get("/detect_world_pos",

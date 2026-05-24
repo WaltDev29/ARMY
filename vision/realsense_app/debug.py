@@ -9,7 +9,7 @@ is_debug_running = False
 def _debug_stream_loop():
     global is_debug_running
     # 지연 임포트를 통해 초기 카메라 구동 속도 저하 방지 및 순환 참조 방지
-    from .yolo_detect import detect_objects
+    from .detection_manager import detect_objects
     
     while is_debug_running:
         try:

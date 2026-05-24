@@ -53,33 +53,6 @@ def get_aligned_frames():
 
 
 
-# ============ Get RGB Image ============
-def get_rgb_image():
-    """카메라를 통해 2D RGB 이미지를 반환하는 함수"""
-    aligned_frames = get_aligned_frames()
-    color_frame = aligned_frames.get_color_frame()
-    
-    if not color_frame:
-        return None
-        
-    return np.asanyarray(color_frame.get_data())
-
-
-
-# ============ Get Depth Data ============
-def get_depth_data():
-    """카메라를 통해 Depth 데이터를 반환하는 함수"""
-    aligned_frames = get_aligned_frames()
-    depth_frame = aligned_frames.get_depth_frame()
-    
-    if not depth_frame:
-        return None
-        
-    # 밀리미터 단위의 depth 데이터 배열 (640x480)
-    return np.asanyarray(depth_frame.get_data())
-
-
-
 # ============ Stop Camera ============
 def stop_camera():
     global is_streaming, pipeline
@@ -166,46 +139,3 @@ def generate_frames():
 
 
 
-
-# ============ depth 데이터 & YOLO 추론 결과 반환 ============
-def get_detection_data():
-    """카메라에서 이미지를 받아 depth 데이터와 YOLO 추론 결과를 반환합니다."""
-    from .yolo_detect import detect_objects
-    
-    # 1. 카메라를 통해 2D RGB 이미지 및 Depth 데이터 가져오기
-    aligned_frames = get_aligned_frames()
-    color_frame = aligned_frames.get_color_frame()
-    depth_frame = aligned_frames.get_depth_frame()
-
-    if not color_frame or not depth_frame:
-        return {"error": "카메라에서 프레임을 가져오지 못했습니다."}
-
-    rgb_image = np.asanyarray(color_frame.get_data())
-    depth_data = np.asanyarray(depth_frame.get_data())
-
-    # 2. YOLO를 통해 오브젝트 탐지
-    detected_objects = detect_objects(rgb_image)
-
-    results = []
-    # depth_data의 shape는 (height, width) 형태
-    height, width = depth_data.shape
-    
-    for obj in detected_objects:
-        x, y, w, h = obj["xywh"]
-        # 바운딩 박스 중심점 (cx, cy)
-        cx, cy = int(x), int(y)
-        
-        # 깊이 데이터가 이미지 해상도 범위를 벗어나지 않도록 예외 처리
-        if 0 <= cy < height and 0 <= cx < width:
-            # depth_data의 단위는 밀리미터(mm)
-            depth_value = float(depth_data[cy, cx])
-        else:
-            depth_value = 0.0
-            
-        results.append({
-            "class_name": obj["class_name"],
-            "xywh": [x, y, w, h],
-            "distance_mm": depth_value
-        })
-
-    return results
