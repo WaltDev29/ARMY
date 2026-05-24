@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel
 import os
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent # project root
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent # project root
 ENV_PATH = ".env.dofbot"
 
 load_dotenv(BASE_DIR / ENV_PATH, override=True)

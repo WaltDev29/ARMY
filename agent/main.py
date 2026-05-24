@@ -4,7 +4,7 @@ Pybullet 제어 Tool을 가진 Agent 개발
 '''
 
 
-from agent import create_agent
+from app import create_agent
 from langchain.messages import HumanMessage
 
 
