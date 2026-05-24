@@ -1,9 +1,8 @@
 from typing import List
 from pydantic import BaseModel
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from .camera import stop_camera, get_intrinsics, generate_frames, set_current_targets, get_current_targets
-from .debug import start_debug_stream
 from .schemas import ResponseBase, Intrinsics
 from .convert_pos import get_objects_world_pos
 
@@ -63,9 +62,7 @@ def create_app() -> FastAPI:
              response_model=ResponseBase)
     async def detect_world_pos():
         data = get_objects_world_pos()
-        if isinstance(data, dict) and "error" in data:
-            return data
-            
+        # get_objects_world_pos는 실패 시 빈 리스트([])를 반환하므로 dict 에러 체크 로직 제거
         return ResponseBase(
             status="success",
             detections=data
@@ -77,7 +74,10 @@ def create_app() -> FastAPI:
              description="카메라의 고유 스펙 (intrinsics)과 현재 pitch, roll 각도를 반환합니다.",
              response_model=Intrinsics)
     def get_camera_state():
-        return Intrinsics(**get_intrinsics())
+        intrinsics = get_intrinsics()
+        if not intrinsics:
+            raise HTTPException(status_code=500, detail="카메라 스펙을 가져오지 못했습니다. 카메라 연결을 확인하세요.")
+        return Intrinsics(**intrinsics)
         
 
     return app
