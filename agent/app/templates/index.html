@@ -86,6 +86,68 @@
             border-bottom-left-radius: 4px;
         }
 
+        /* 아코디언 로깅 컨테이너 (말풍선 내부에 들어감) */
+        .log-container {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .log-header {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            font-size: 0.8rem;
+            color: #ccc;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .log-header:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .log-content {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #4facfe;
+            padding: 0 12px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+
+        /* 스트리밍 진행 중 - 고정 크기 스크롤 */
+        .log-content.streaming {
+            padding: 10px 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        /* 스트리밍 완료 후 사용자가 열었을 때 - 내용에 맞춰 늘어남 */
+        .log-content.finished {
+            padding: 10px 12px;
+            max-height: 2000px;
+            overflow-y: hidden;
+        }
+
+        .log-item {
+            margin-bottom: 5px;
+            word-wrap: break-word;
+        }
+
+        /* 최종 답변 영역 */
+        .final-answer {
+            margin-top: 10px;
+            display: none;
+        }
+
         .chat-input {
             padding: 20px;
             background: rgba(0, 0, 0, 0.2);
@@ -134,21 +196,25 @@
             fill: white;
         }
 
-        .typing-indicator {
+        /* 독립된 로딩 모션 말풍선 */
+        .typing-bubble {
             align-self: flex-start;
             background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom-left-radius: 4px;
             padding: 12px 16px;
             border-radius: 15px;
-            border-bottom-left-radius: 4px;
-            display: none;
+            display: flex;
             align-items: center;
             gap: 5px;
+            animation: fadeIn 0.3s ease;
+            margin-bottom: 10px;
         }
 
         .dot {
             width: 8px;
             height: 8px;
-            background: #aaa;
+            background: #ccc;
             border-radius: 50%;
             animation: bounce 1.4s infinite ease-in-out both;
         }
@@ -161,7 +227,6 @@
             40% { transform: scale(1); }
         }
 
-        /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
@@ -174,11 +239,6 @@
         </div>
         <div class="chat-messages" id="messages">
             <div class="message agent">안녕하세요! 무엇을 도와드릴까요?</div>
-            <div class="typing-indicator" id="typing">
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <div class="dot"></div>
-            </div>
         </div>
         <div class="chat-input">
             <input type="text" id="userInput" placeholder="메시지를 입력하세요..." autocomplete="off">
@@ -192,7 +252,6 @@
         const msgsDiv = document.getElementById('messages');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
-        const typingIndicator = document.getElementById('typing');
 
         function scrollToBottom() {
             msgsDiv.scrollTop = msgsDiv.scrollHeight;
@@ -203,8 +262,50 @@
             div.className = `message ${sender}`;
             // 개행 문자를 <br>로 치환하여 서식 유지
             div.innerHTML = text.replace(/\n/g, '<br>');
-            msgsDiv.insertBefore(div, typingIndicator);
+            msgsDiv.appendChild(div);
             scrollToBottom();
+            return div;
+        }
+
+        function createAgentBubble() {
+            // 전체를 감싸는 에이전트 말풍선
+            const agentBubble = document.createElement('div');
+            agentBubble.className = 'message agent';
+            
+            // 1. 아코디언 로깅 컨테이너
+            const logContainer = document.createElement('div');
+            logContainer.className = 'log-container';
+            logContainer.style.display = 'none'; // 처음에는 숨김 처리
+
+            const header = document.createElement('div');
+            header.className = 'log-header';
+            header.innerHTML = '<span>사고 과정 보기</span><span>▼</span>';
+
+            const content = document.createElement('div');
+            content.className = 'log-content streaming'; 
+
+            header.addEventListener('click', () => {
+                if (content.classList.contains('streaming')) {
+                    content.classList.remove('streaming');
+                } else if (content.classList.contains('finished')) {
+                    content.classList.remove('finished');
+                } else {
+                    content.classList.add('finished');
+                }
+            });
+
+            logContainer.appendChild(header);
+            logContainer.appendChild(content);
+
+            // 2. 최종 답변 컨테이너
+            const answerContainer = document.createElement('div');
+            answerContainer.className = 'final-answer';
+            
+            agentBubble.appendChild(logContainer);
+            agentBubble.appendChild(answerContainer);
+            
+            msgsDiv.appendChild(agentBubble);
+            return { agentBubble, logContainer, logContent: content, answerContainer };
         }
 
         async function sendMessage() {
@@ -214,23 +315,131 @@
             addMessage(text, 'user');
             userInput.value = '';
             
-            // 로딩 인디케이터 표시
-            typingIndicator.style.display = 'flex';
+            // 로딩 모션 말풍선 생성
+            const typingBubble = document.createElement('div');
+            typingBubble.className = 'typing-bubble';
+            typingBubble.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+            msgsDiv.appendChild(typingBubble);
+            
             scrollToBottom();
 
+            let agentBubble, logContainer, logContent, answerContainer;
+            let isBubbleCreated = false;
+
             try {
-                const response = await fetch('/chat', {
+                // Fetch 스트림 API 사용
+                const response = await fetch('/chat_stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: text })
                 });
 
-                const data = await response.json();
-                typingIndicator.style.display = 'none';
-                addMessage(data.reply, 'agent');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+
+                let done = false;
+
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+
+                    if (value) {
+                        const chunkStr = decoder.decode(value, { stream: true });
+                        const lines = chunkStr.split('\n');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const dataStr = line.substring(6);
+                                try {
+                                    const data = JSON.parse(dataStr);
+                                    
+                                    // 첫 응답 수신 시 로딩 모션 제거 및 메인 말풍선 생성
+                                    if (!isBubbleCreated) {
+                                        if (msgsDiv.contains(typingBubble)) {
+                                            msgsDiv.removeChild(typingBubble);
+                                        }
+                                        const bubbleElements = createAgentBubble();
+                                        agentBubble = bubbleElements.agentBubble;
+                                        logContainer = bubbleElements.logContainer;
+                                        logContent = bubbleElements.logContent;
+                                        answerContainer = bubbleElements.answerContainer;
+                                        isBubbleCreated = true;
+                                    }
+                                    
+                                    if (data.type === 'llm_chunk') {
+                                        answerContainer.innerHTML += data.content.replace(/\n/g, '<br>');
+                                        answerContainer.style.display = 'block';
+                                        scrollToBottom();
+                                        
+                                    } else if (data.type === 'tool_start') {
+                                        // 로그 컨테이너 화면에 표시
+                                        logContainer.style.display = 'flex';
+                                        
+                                        // 방금 전까지 타이핑되던 텍스트는 사실 사고 과정이었으므로 위로 올림
+                                        const reasoningText = answerContainer.innerHTML;
+                                        if (reasoningText.trim() !== '') {
+                                            const p = document.createElement('div');
+                                            p.className = 'log-item';
+                                            p.innerHTML = '🤔 [사고 과정]<br>' + reasoningText;
+                                            logContent.appendChild(p);
+                                        }
+                                        
+                                        // 영역 비우기
+                                        answerContainer.innerHTML = '';
+                                        answerContainer.style.display = 'none';
+
+                                        const pTool = document.createElement('div');
+                                        pTool.className = 'log-item';
+                                        pTool.textContent = `🔧 [도구 호출] ${data.name} (파라미터: ${data.args})`;
+                                        logContent.appendChild(pTool);
+                                        
+                                        logContent.scrollTop = logContent.scrollHeight;
+                                        scrollToBottom();
+                                        
+                                    } else if (data.type === 'tool_end') {
+                                        const p = document.createElement('div');
+                                        p.className = 'log-item';
+                                        // 반환값 표시
+                                        p.textContent = `✅ [도구 완료] ${data.name}\n결과: ${data.result}`;
+                                        logContent.appendChild(p);
+                                        
+                                        logContent.scrollTop = logContent.scrollHeight;
+                                        scrollToBottom();
+                                        
+                                    } else if (data.type === 'done') {
+                                        // 스트리밍 종료 후 로그 창 닫기
+                                        logContent.classList.remove('streaming');
+                                        logContent.classList.remove('finished'); 
+                                        scrollToBottom();
+                                        
+                                    } else if (data.type === 'error') {
+                                        answerContainer.innerHTML = '오류 발생: ' + data.content.replace(/\n/g, '<br>');
+                                        answerContainer.style.display = 'block';
+                                        scrollToBottom();
+                                    }
+                                } catch (e) {
+                                    // JSON 파싱 에러 등 무시
+                                }
+                            }
+                        }
+                    }
+                }
             } catch (err) {
-                typingIndicator.style.display = 'none';
-                addMessage('오류가 발생했습니다. 서버 연결을 확인해 주세요.', 'agent');
+                if (msgsDiv.contains(typingBubble)) {
+                    msgsDiv.removeChild(typingBubble);
+                }
+                if (!isBubbleCreated) {
+                    const bubbleElements = createAgentBubble();
+                    answerContainer = bubbleElements.answerContainer;
+                }
+                answerContainer.innerHTML = '통신 오류가 발생했습니다.';
+                answerContainer.style.display = 'block';
+            } finally {
+                if (isBubbleCreated) {
+                    logContent.classList.remove('streaming');
+                } else if (msgsDiv.contains(typingBubble)) {
+                    msgsDiv.removeChild(typingBubble);
+                }
             }
         }
 

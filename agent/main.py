@@ -34,9 +34,45 @@ async def get_ui():
     return HTMLResponse(content=html_content)
 
 from fastapi import Response
+from fastapi.responses import StreamingResponse
+import json
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return Response(content=b"", media_type="image/x-icon", status_code=204)
+
+@app.post("/chat_stream")
+async def chat_stream(req: ChatRequest):
+    async def generate():
+        try:
+            # LangGraph의 astream_events를 사용하여 토큰 단위 이벤트를 받습니다.
+            async for event in agent.astream_events({"messages": [HumanMessage(content=req.message)]}, config=config, version="v2"):
+                kind = event["event"]
+                name = event.get("name", "")
+
+                if kind == "on_chat_model_stream":
+                    chunk = event["data"]["chunk"]
+                    if chunk.content:
+                        # LLM이 텍스트(토큰)를 생성 중입니다.
+                        yield f"data: {json.dumps({'type': 'llm_chunk', 'content': chunk.content}, ensure_ascii=False)}\n\n"
+                        
+                elif kind == "on_tool_start":
+                    # 도구 호출 시작
+                    input_data = event["data"].get("input", {})
+                    yield f"data: {json.dumps({'type': 'tool_start', 'name': name, 'args': str(input_data)}, ensure_ascii=False)}\n\n"
+                    
+                elif kind == "on_tool_end":
+                    # 도구 호출 종료
+                    output_data = event["data"].get("output", "")
+                    yield f"data: {json.dumps({'type': 'tool_end', 'name': name, 'result': str(output_data)}, ensure_ascii=False)}\n\n"
+                    
+            # 스트리밍 완료
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
+            
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
