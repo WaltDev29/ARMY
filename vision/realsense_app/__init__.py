@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -56,12 +56,13 @@ def create_app() -> FastAPI:
 
 
     
-    @app.get("/detect_world_pos",
+    @app.post("/detect_world_pos",
              summary="Detect-World-Pos",
-             description="오브젝트들의 월드 좌표를 반환합니다.",
+             description="오브젝트들의 월드 좌표를 반환합니다. Request Body로 탐지 대상을 지정할 수 있으며, 생략 시 현재 설정된 대상을 사용합니다.",
              response_model=ResponseBase)
-    async def detect_world_pos():
-        data = get_objects_world_pos()
+    async def detect_world_pos(request: Optional[TargetRequest] = None):
+        targets = request.targets if request else None
+        data = get_objects_world_pos(target_classes=targets)
         # get_objects_world_pos는 실패 시 빈 리스트([])를 반환하므로 dict 에러 체크 로직 제거
         return ResponseBase(
             status="success",
