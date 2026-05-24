@@ -5,12 +5,14 @@ Pybullet 제어 Tool을 가진 Agent 개발
 
 
 import os
+import requests
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 
 from app import create_agent
+from app.core.config import config as app_config
 from langchain.messages import HumanMessage
 
 app = FastAPI(title="ARMY Agent Web UI")
@@ -40,6 +42,21 @@ import json
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return Response(content=b"", media_type="image/x-icon", status_code=204)
+
+@app.get("/config")
+async def get_config():
+    return {
+        "VISION_URL": app_config.VISION_URL,
+        "BOT_URL": app_config.BOT_URL
+    }
+
+@app.get("/robot/state")
+async def get_robot_state_proxy():
+    try:
+        resp = requests.get(f"{app_config.BOT_URL}/robot/state", timeout=3.0)
+        return resp.json()
+    except Exception as e:
+        return {"error": str(e), "ee": {"x": 0, "y": 0, "z": 0}, "joints": [0,0,0,0,0,0]}
 
 @app.post("/chat_stream")
 async def chat_stream(req: ChatRequest):

@@ -23,19 +23,84 @@
             align-items: center;
         }
 
-        .chat-container {
-            width: 100%;
-            max-width: 600px;
-            height: 85vh;
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .main-layout {
+            display: flex;
+            width: 95vw;
+            height: 95vh;
+            gap: 20px;
+            max-width: 1600px;
+        }
+
+        .dashboard-panel {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            gap: 20px;
+            min-width: 400px;
+            min-height: 0;
+        }
+
+        .dash-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .vision-card {
+            flex: 2;
             overflow: hidden;
+        }
+
+        .robot-card {
+            flex: 1;
+        }
+
+        .dash-title {
+            margin: 0 0 15px 0;
+            font-size: 1.1rem;
+            color: #fff;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .state-container {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            color: #4ade80;
+            font-size: 0.95rem;
+            overflow-y: auto;
+        }
+
+        .state-item {
+            margin-bottom: 8px;
+        }
+
+        .state-label {
+            color: #94a3b8;
+            margin-right: 5px;
+        }
+
+        .chat-container {
+            flex: 1;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 400px;
         }
 
         .chat-header {
@@ -233,18 +298,40 @@
     </style>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            ARMY Agent
+    <div class="main-layout">
+        <!-- 왼쪽 대시보드 영역 -->
+        <div class="dashboard-panel">
+            <!-- 비전 카메라 화면 -->
+            <div class="dash-card vision-card">
+                <h3 class="dash-title">📷 Vision Stream</h3>
+                <div style="flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center;">
+                    <img id="vision-stream" src="" alt="Connecting to Vision Server..." style="width: 100%; height: 100%; object-fit: contain;" />
+                </div>
+            </div>
+            
+            <!-- 로봇 상태 정보 -->
+            <div class="dash-card robot-card">
+                <h3 class="dash-title">🤖 Robot Status</h3>
+                <div id="robot-state" class="state-container">
+                    <p style="color:#aaa;">Loading...</p>
+                </div>
+            </div>
         </div>
-        <div class="chat-messages" id="messages">
-            <div class="message agent">안녕하세요! 무엇을 도와드릴까요?</div>
-        </div>
-        <div class="chat-input">
-            <input type="text" id="userInput" placeholder="메시지를 입력하세요..." autocomplete="off">
-            <button id="sendBtn">
-                <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
-            </button>
+
+        <!-- 오른쪽 채팅 영역 -->
+        <div class="chat-container">
+            <div class="chat-header">
+                ARMY Agent
+            </div>
+            <div class="chat-messages" id="messages">
+                <div class="message agent">안녕하세요! 무엇을 도와드릴까요?</div>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="userInput" placeholder="메시지를 입력하세요..." autocomplete="off">
+                <button id="sendBtn">
+                    <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -447,6 +534,51 @@
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
+
+        // 대시보드 로직 초기화
+        async function initDashboard() {
+            let configObj = null;
+            try {
+                const res = await fetch('/config');
+                configObj = await res.json();
+                
+                if (configObj.VISION_URL) {
+                    const img = document.getElementById('vision-stream');
+                    img.src = configObj.VISION_URL + "/stream";
+                }
+            } catch (e) {
+                console.error("Failed to load config:", e);
+            }
+
+            // 로봇 상태 주기적 업데이트 (500ms)
+            setInterval(async () => {
+                try {
+                    // 에이전트 서버 프록시를 통해 우회 (CORS 문제 해결)
+                    const res = await fetch('/robot/state');
+                    const data = await res.json();
+                    const stateDiv = document.getElementById('robot-state');
+                    
+                    if (data.error) {
+                        stateDiv.innerHTML = `<div style="color: #ef4444;">Disconnected: ${data.error}</div>`;
+                    } else {
+                        // 로봇 API가 { success: true, data: { ee: {...}, joints: [...] } } 형태로 반환할 수 있음
+                        const robotData = data.data || data;
+                        const ee = robotData.ee || {};
+                        const joints = robotData.joints || [];
+                        stateDiv.innerHTML = `
+                            <div class="state-item"><span class="state-label">EE Position (m)</span></div>
+                            <div class="state-item" style="padding-left: 10px;">X: ${(ee.x||0).toFixed(3)} | Y: ${(ee.y||0).toFixed(3)} | Z: ${(ee.z||0).toFixed(3)}</div>
+                            <div class="state-item" style="margin-top: 15px;"><span class="state-label">Joints Angle (deg)</span></div>
+                            <div class="state-item" style="padding-left: 10px;">[${joints.map(j => (j || 0).toFixed(2)).join(', ')}]</div>
+                        `;
+                    }
+                } catch (e) {
+                    // 통신 오류 시 조용히 무시 (재시도)
+                }
+            }, 500);
+        }
+
+        initDashboard();
     </script>
 </body>
 </html>
