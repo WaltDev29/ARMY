@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import cv2.aruco as aruco
-from .camera import get_intrinsics, get_aligned_frames
+from .camera import get_intrinsics, get_latest_frames_data
 from .detection_manager import detect_objects
 from .segmentation_mask import generate_masks
 import logging
@@ -66,16 +66,12 @@ def draw_custom_axes(img, K, dist, rvec, tvec, length):
 
 # ============ 1. 카메라 픽셀, 깊이 및 RGB 가져오기 ============
 def _get_object_pos(target_classes=None):
-    aligned_frames = get_aligned_frames()
-    color_frame = aligned_frames.get_color_frame()
-    depth_frame = aligned_frames.get_depth_frame()
+    rgb_image, depth_data = get_latest_frames_data()
     
-    if not color_frame or not depth_frame:
+    if rgb_image is None or depth_data is None:
         print("Error: 카메라에서 프레임을 가져오지 못했습니다.")
         return [], None
 
-    rgb_image = np.asanyarray(color_frame.get_data())
-    depth_data = np.asanyarray(depth_frame.get_data())
     height, width = depth_data.shape
     
     # 1. 1차 시도: 표준 YOLOv11 (상시 모델)

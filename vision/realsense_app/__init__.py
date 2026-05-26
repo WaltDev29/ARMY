@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from .camera import stop_camera, get_intrinsics, generate_frames, set_current_targets, get_current_targets
 from .schemas import ResponseBase, Intrinsics
 from .convert_pos import get_objects_world_pos
+from .debug import start_debug_stream
 
 class TargetRequest(BaseModel):
     targets: List[str]
@@ -60,7 +61,7 @@ def create_app() -> FastAPI:
              summary="Detect-World-Pos",
              description="오브젝트들의 월드 좌표를 반환합니다. Request Body로 탐지 대상을 지정할 수 있으며, 생략 시 현재 설정된 대상을 사용합니다.",
              response_model=ResponseBase)
-    async def detect_world_pos(request: Optional[TargetRequest] = None):
+    def detect_world_pos(request: Optional[TargetRequest] = None):
         targets = request.targets if request else None
         data = get_objects_world_pos(target_classes=targets)
         # get_objects_world_pos는 실패 시 빈 리스트([])를 반환하므로 dict 에러 체크 로직 제거
