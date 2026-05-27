@@ -62,8 +62,11 @@ def create_app() -> FastAPI:
              description="오브젝트들의 월드 좌표를 반환합니다. Request Body로 탐지 대상을 지정할 수 있으며, 생략 시 현재 설정된 대상을 사용합니다.",
              response_model=ResponseBase)
     def detect_world_pos(request: Optional[TargetRequest] = None):
-        targets = request.targets if request else None
-        data = get_objects_world_pos(target_classes=targets)
+        if request is not None and request.targets is not None:
+            set_current_targets(request.targets)
+            
+        # target_classes=None으로 전달하여 내부에서 get_current_targets()를 사용하게 함
+        data = get_objects_world_pos(target_classes=None)
         # get_objects_world_pos는 실패 시 빈 리스트([])를 반환하므로 dict 에러 체크 로직 제거
         return ResponseBase(
             status="success",
