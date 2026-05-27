@@ -17,6 +17,25 @@ def get_realsense_detections(targets: list[str] = None) -> Dict[str, Any]:
     except requests.exceptions.RequestException as e:
         return {"status": "error", "error": str(e), "detections": []}
 
+def reset_vision_targets() -> Dict[str, Any]:
+    """
+    Vision 모듈의 전역 타겟 설정을 초기화(빈 목록)하여, 화면에 보이는 모든 기본 객체를 다시 탐지하도록 만듭니다.
+    """
+    try:
+        resp = requests.post(f"{config.VISION_URL}/targets", json={"targets": []}, timeout=5)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.RequestException as e:
+        return {"status": "error", "error": str(e)}
+
+reset_targets_tool = tool(
+    reset_vision_targets,
+    description="""
+    Vision 모듈의 전역 타겟 설정을 초기화(빈 목록)합니다.
+    이전에 특정 물체(예: 'apple')만 찾도록 설정된 필터링을 해제하고, 다시 모든 객체를 탐지하는 기본 상태로 되돌립니다.
+    """
+)
+
 realsense_detect_tool = tool(
     get_realsense_detections,
     description="""
@@ -41,5 +60,6 @@ realsense_detect_tool = tool(
 )
 
 tools = [
-    realsense_detect_tool
+    realsense_detect_tool,
+    reset_targets_tool
 ]
