@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARMY Agent</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1e1e2f 0%, #12121a 100%);
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .main-layout {
+            display: flex;
+            width: 95vw;
+            height: 95vh;
+            gap: 20px;
+            max-width: 1600px;
+        }
+
+        .dashboard-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-width: 400px;
+            min-height: 0;
+        }
+
+        .dash-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .vision-card {
+            flex: 2;
+            overflow: hidden;
+        }
+
+        .robot-card {
+            flex: 1;
+        }
+
+        .dash-title {
+            margin: 0 0 15px 0;
+            font-size: 1.1rem;
+            color: #fff;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .state-container {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            color: #4ade80;
+            font-size: 0.95rem;
+            overflow-y: auto;
+        }
+
+        .state-item {
+            margin-bottom: 8px;
+        }
+
+        .state-label {
+            color: #94a3b8;
+            margin-right: 5px;
+        }
+
+        .chat-container {
+            flex: 1;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 400px;
+        }
+
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.2);
+            font-weight: 600;
+            letter-spacing: 1px;
+            font-size: 1.2rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 15px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            animation: fadeIn 0.3s ease;
+            word-wrap: break-word;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: #ffffff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.agent {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom-left-radius: 4px;
+        }
+
+        /* 아코디언 로깅 컨테이너 (말풍선 내부에 들어감) */
+        .log-container {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .log-header {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            font-size: 0.8rem;
+            color: #ccc;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .log-header:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .log-content {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #4facfe;
+            padding: 0 12px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+
+        /* 스트리밍 진행 중 - 고정 크기 스크롤 */
+        .log-content.streaming {
+            padding: 10px 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        /* 스트리밍 완료 후 사용자가 열었을 때 - 내용에 맞춰 늘어남 */
+        .log-content.finished {
+            padding: 10px 12px;
+            max-height: 2000px;
+            overflow-y: hidden;
+        }
+
+        .log-item {
+            margin-bottom: 5px;
+            word-wrap: break-word;
+        }
+
+        /* 최종 답변 영역 */
+        .final-answer {
+            margin-top: 10px;
+            display: none;
+        }
+
+        .chat-input {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 20px;
+            border-radius: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #4facfe;
+            box-shadow: 0 0 10px rgba(79, 172, 254, 0.3);
+        }
+
+        button {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+        }
+
+        button svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        /* 독립된 로딩 모션 말풍선 */
+        .typing-bubble {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom-left-radius: 4px;
+            padding: 12px 16px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            animation: fadeIn 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: #ccc;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div class="main-layout">
+        <!-- 왼쪽 대시보드 영역 -->
+        <div class="dashboard-panel">
+            <!-- 비전 카메라 화면 -->
+            <div class="dash-card vision-card">
+                <h3 class="dash-title">📷 Vision Stream</h3>
+                <div style="flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center;">
+                    <img id="vision-stream" src="" alt="Connecting to Vision Server..." style="width: 100%; height: 100%; object-fit: contain;" />
+                </div>
+            </div>
+            
+            <!-- 로봇 상태 정보 -->
+            <div class="dash-card robot-card">
+                <h3 class="dash-title">🤖 Robot Status</h3>
+                <div id="robot-state" class="state-container">
+                    <p style="color:#aaa;">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 오른쪽 채팅 영역 -->
+        <div class="chat-container">
+            <div class="chat-header">
+                ARMY Agent
+            </div>
+            <div class="chat-messages" id="messages">
+                <div class="message agent">안녕하세요! 무엇을 도와드릴까요?</div>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="userInput" placeholder="메시지를 입력하세요..." autocomplete="off">
+                <button id="sendBtn">
+                    <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const msgsDiv = document.getElementById('messages');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        function scrollToBottom() {
+            msgsDiv.scrollTop = msgsDiv.scrollHeight;
+        }
+
+        function addMessage(text, sender) {
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
+            // 개행 문자를 <br>로 치환하여 서식 유지
+            div.innerHTML = text.replace(/\n/g, '<br>');
+            msgsDiv.appendChild(div);
+            scrollToBottom();
+            return div;
+        }
+
+        function createAgentBubble() {
+            // 전체를 감싸는 에이전트 말풍선
+            const agentBubble = document.createElement('div');
+            agentBubble.className = 'message agent';
+            
+            // 1. 아코디언 로깅 컨테이너
+            const logContainer = document.createElement('div');
+            logContainer.className = 'log-container';
+            logContainer.style.display = 'none'; // 처음에는 숨김 처리
+
+            const header = document.createElement('div');
+            header.className = 'log-header';
+            header.innerHTML = '<span>사고 과정 보기</span><span>▼</span>';
+
+            const content = document.createElement('div');
+            content.className = 'log-content streaming'; 
+
+            header.addEventListener('click', () => {
+                if (content.classList.contains('streaming')) {
+                    content.classList.remove('streaming');
+                } else if (content.classList.contains('finished')) {
+                    content.classList.remove('finished');
+                } else {
+                    content.classList.add('finished');
+                }
+            });
+
+            logContainer.appendChild(header);
+            logContainer.appendChild(content);
+
+            // 2. 최종 답변 컨테이너
+            const answerContainer = document.createElement('div');
+            answerContainer.className = 'final-answer';
+            
+            agentBubble.appendChild(logContainer);
+            agentBubble.appendChild(answerContainer);
+            
+            msgsDiv.appendChild(agentBubble);
+            return { agentBubble, logContainer, logContent: content, answerContainer };
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            userInput.value = '';
+            
+            // 로딩 모션 말풍선 생성
+            const typingBubble = document.createElement('div');
+            typingBubble.className = 'typing-bubble';
+            typingBubble.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+            msgsDiv.appendChild(typingBubble);
+            
+            scrollToBottom();
+
+            let agentBubble, logContainer, logContent, answerContainer;
+            let isBubbleCreated = false;
+
+            try {
+                // Fetch 스트림 API 사용
+                const response = await fetch('/chat_stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+
+                let done = false;
+
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+
+                    if (value) {
+                        const chunkStr = decoder.decode(value, { stream: true });
+                        const lines = chunkStr.split('\n');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const dataStr = line.substring(6);
+                                try {
+                                    const data = JSON.parse(dataStr);
+                                    
+                                    // 첫 응답 수신 시 로딩 모션 제거 및 메인 말풍선 생성
+                                    if (!isBubbleCreated) {
+                                        if (msgsDiv.contains(typingBubble)) {
+                                            msgsDiv.removeChild(typingBubble);
+                                        }
+                                        const bubbleElements = createAgentBubble();
+                                        agentBubble = bubbleElements.agentBubble;
+                                        logContainer = bubbleElements.logContainer;
+                                        logContent = bubbleElements.logContent;
+                                        answerContainer = bubbleElements.answerContainer;
+                                        isBubbleCreated = true;
+                                    }
+                                    
+                                    if (data.type === 'llm_chunk') {
+                                        answerContainer.innerHTML += data.content.replace(/\n/g, '<br>');
+                                        answerContainer.style.display = 'block';
+                                        scrollToBottom();
+                                        
+                                    } else if (data.type === 'tool_start') {
+                                        // 로그 컨테이너 화면에 표시
+                                        logContainer.style.display = 'flex';
+                                        
+                                        // 방금 전까지 타이핑되던 텍스트는 사실 사고 과정이었으므로 위로 올림
+                                        const reasoningText = answerContainer.innerHTML;
+                                        if (reasoningText.trim() !== '') {
+                                            const p = document.createElement('div');
+                                            p.className = 'log-item';
+                                            p.innerHTML = '🤔 [사고 과정]<br>' + reasoningText;
+                                            logContent.appendChild(p);
+                                        }
+                                        
+                                        // 영역 비우기
+                                        answerContainer.innerHTML = '';
+                                        answerContainer.style.display = 'none';
+
+                                        const pTool = document.createElement('div');
+                                        pTool.className = 'log-item';
+                                        pTool.textContent = `🔧 [도구 호출] ${data.name} (파라미터: ${data.args})`;
+                                        logContent.appendChild(pTool);
+                                        
+                                        logContent.scrollTop = logContent.scrollHeight;
+                                        scrollToBottom();
+                                        
+                                    } else if (data.type === 'tool_end') {
+                                        const p = document.createElement('div');
+                                        p.className = 'log-item';
+                                        // 반환값 표시
+                                        p.textContent = `✅ [도구 완료] ${data.name}\n결과: ${data.result}`;
+                                        logContent.appendChild(p);
+                                        
+                                        logContent.scrollTop = logContent.scrollHeight;
+                                        scrollToBottom();
+                                        
+                                    } else if (data.type === 'done') {
+                                        // 스트리밍 종료 후 로그 창 닫기
+                                        logContent.classList.remove('streaming');
+                                        logContent.classList.remove('finished'); 
+                                        scrollToBottom();
+                                        
+                                    } else if (data.type === 'error') {
+                                        answerContainer.innerHTML = '오류 발생: ' + data.content.replace(/\n/g, '<br>');
+                                        answerContainer.style.display = 'block';
+                                        scrollToBottom();
+                                    }
+                                } catch (e) {
+                                    // JSON 파싱 에러 등 무시
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                if (msgsDiv.contains(typingBubble)) {
+                    msgsDiv.removeChild(typingBubble);
+                }
+                if (!isBubbleCreated) {
+                    const bubbleElements = createAgentBubble();
+                    answerContainer = bubbleElements.answerContainer;
+                }
+                answerContainer.innerHTML = '통신 오류가 발생했습니다.';
+                answerContainer.style.display = 'block';
+            } finally {
+                if (isBubbleCreated) {
+                    logContent.classList.remove('streaming');
+                } else if (msgsDiv.contains(typingBubble)) {
+                    msgsDiv.removeChild(typingBubble);
+                }
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // 대시보드 로직 초기화
+        async function initDashboard() {
+            let configObj = null;
+            try {
+                const res = await fetch('/config');
+                configObj = await res.json();
+                
+                if (configObj.VISION_URL) {
+                    const img = document.getElementById('vision-stream');
+                    img.onerror = function() {
+                        console.error("Vision stream connection failed.");
+                        this.onerror = null;
+                        this.src = "";
+                        this.alt = "Vision Server Disconnected";
+                    };
+                    img.src = configObj.VISION_URL + "/stream";
+                }
+            } catch (e) {
+                console.error("Failed to load config:", e);
+            }
+
+            // 로봇 상태 주기적 업데이트 (500ms)
+            let robotErrorCount = 0;
+            const robotInterval = setInterval(async () => {
+                try {
+                    // 에이전트 서버 프록시를 통해 우회 (CORS 문제 해결)
+                    const res = await fetch('/robot/state');
+                    if (!res.ok) throw new Error("HTTP error " + res.status);
+                    const data = await res.json();
+                    const stateDiv = document.getElementById('robot-state');
+                    
+                    if (data.error) {
+                        stateDiv.innerHTML = `<div style="color: #ef4444;">Disconnected: ${data.error}</div>`;
+                        robotErrorCount++;
+                    } else {
+                        robotErrorCount = 0; // 통신 성공 시 에러 카운트 초기화
+                        // 로봇 API가 { success: true, data: { ee: {...}, joints: [...] } } 형태로 반환할 수 있음
+                        const robotData = data.data || data;
+                        const ee = robotData.ee || {};
+                        const joints = robotData.joints || [];
+                        stateDiv.innerHTML = `
+                            <div class="state-item"><span class="state-label">EE Position (m)</span></div>
+                            <div class="state-item" style="padding-left: 10px;">X: ${(ee.x||0).toFixed(3)} | Y: ${(ee.y||0).toFixed(3)} | Z: ${(ee.z||0).toFixed(3)}</div>
+                            <div class="state-item" style="margin-top: 15px;"><span class="state-label">Joints Angle (deg)</span></div>
+                            <div class="state-item" style="padding-left: 10px;">[${joints.map(j => (j || 0).toFixed(2)).join(', ')}]</div>
+                        `;
+                    }
+                } catch (e) {
+                    robotErrorCount++;
+                    const stateDiv = document.getElementById('robot-state');
+                    stateDiv.innerHTML = `<div style="color: #ef4444;">Disconnected: Connection Error</div>`;
+                }
+
+                // 연속 3회 실패 시 요청 중단
+                if (robotErrorCount >= 3) {
+                    clearInterval(robotInterval);
+                    const stateDiv = document.getElementById('robot-state');
+                    stateDiv.innerHTML += `<div style="color: #ef4444; font-size: 0.85rem; margin-top: 8px;">(연결 실패로 요청 중단됨)</div>`;
+                }
+            }, 500);
+        }
+
+        initDashboard();
+    </script>
+</body>
+</html>

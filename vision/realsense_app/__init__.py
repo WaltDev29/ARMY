@@ -1,11 +1,11 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
-from .camera import stop_camera, get_intrinsics, generate_frames, get_detection_data, set_current_targets, get_current_targets
-from .debug import start_debug_stream
+from .camera import stop_camera, get_intrinsics, generate_frames, set_current_targets, get_current_targets
 from .schemas import ResponseBase, Intrinsics
 from .convert_pos import get_objects_world_pos
+from .debug import start_debug_stream
 
 class TargetRequest(BaseModel):
     targets: List[str]
@@ -56,35 +56,18 @@ def create_app() -> FastAPI:
 
 
 
-    @app.get("/detect",
-             summary="Detect",
-             description="""
-             카메라에서 이미지를 받아 depth 데이터와 YOLO 추론 결과를 반환합니다.
-             """,
-             response_model=ResponseBase)
-    async def detect():
-        """
-        카메라에서 이미지를 받아 depth 데이터와 YOLO 추론 결과를 반환합니다.
-        """
-        data = get_detection_data()
-        if isinstance(data, dict) and "error" in data:
-            return data
-            
-        return ResponseBase(
-            status="success",
-            detections=data
-        )
-
     
-    @app.get("/detect_world_pos",
+    @app.post("/detect_world_pos",
              summary="Detect-World-Pos",
-             description="오브젝트들의 월드 좌표를 반환합니다.",
+             description="오브젝트들의 월드 좌표를 반환합니다. Request Body로 탐지 대상을 지정할 수 있으며, 생략 시 현재 설정된 대상을 사용합니다.",
              response_model=ResponseBase)
-    async def detect_world_pos():
-        data = get_objects_world_pos()
-        if isinstance(data, dict) and "error" in data:
-            return data
+    def detect_world_pos(request: Optional[TargetRequest] = None):
+        if request is not None and request.targets is not None:
+            set_current_targets(request.targets)
             
+        # target_classes=None으로 전달하여 내부에서 get_current_targets()를 사용하게 함
+        data = get_objects_world_pos(target_classes=None)
+        # get_objects_world_pos는 실패 시 빈 리스트([])를 반환하므로 dict 에러 체크 로직 제거
         return ResponseBase(
             status="success",
             detections=data
@@ -96,7 +79,10 @@ def create_app() -> FastAPI:
              description="카메라의 고유 스펙 (intrinsics)과 현재 pitch, roll 각도를 반환합니다.",
              response_model=Intrinsics)
     def get_camera_state():
-        return Intrinsics(**get_intrinsics())
+        intrinsics = get_intrinsics()
+        if not intrinsics:
+            raise HTTPException(status_code=500, detail="카메라 스펙을 가져오지 못했습니다. 카메라 연결을 확인하세요.")
+        return Intrinsics(**intrinsics)
         
 
     return app

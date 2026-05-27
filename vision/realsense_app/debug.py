@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
 import threading
-from .camera import get_aligned_frames, init_camera
+from .camera import get_latest_frames_data, init_camera
+import time
 
 debug_thread = None
 is_debug_running = False
@@ -9,20 +10,15 @@ is_debug_running = False
 def _debug_stream_loop():
     global is_debug_running
     # 지연 임포트를 통해 초기 카메라 구동 속도 저하 방지 및 순환 참조 방지
-    from .yolo_detect import detect_objects
+    from .detection_manager import detect_objects
     
     while is_debug_running:
         try:
-            aligned_frames = get_aligned_frames()
+            color_image, depth_image = get_latest_frames_data()
             
-            color_frame = aligned_frames.get_color_frame()
-            depth_frame = aligned_frames.get_depth_frame()
-            
-            if not color_frame or not depth_frame:
+            if color_image is None or depth_image is None:
+                time.sleep(0.02)
                 continue
-                
-            color_image = np.asanyarray(color_frame.get_data())
-            depth_image = np.asanyarray(depth_frame.get_data())
             
             # YOLO 추론을 수행하고 RGB 이미지에 바운딩 박스를 그립니다.
             detections = detect_objects(color_image)

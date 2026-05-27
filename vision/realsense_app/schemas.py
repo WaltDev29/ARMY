@@ -1,10 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class DetectionResult(BaseModel):
-    class_name: str = Field(..., description="탐지된 객체의 클래스 이름")
-    xywh: list[float] = Field(..., description="탐지된 객체의 중앙값과 너비, 높이 (x, y, width, height)")
-    distance_mm: float = Field(..., description="탐지된 객체까지의 거리 (밀리미터)")
+
 
 class WorldPosResult(BaseModel):
     class_name: str = Field(..., description="탐지된 객체의 클래스 이름")
@@ -26,4 +23,4 @@ class Intrinsics(BaseModel):
 
 class ResponseBase(BaseModel):
     status: str = Field(..., description="응답 상태 (예: 'success' 또는 'error')")
-    detections: list[DetectionResult|WorldPosResult] = Field(..., description="탐지된 객체들의 리스트")
+    detections: list[WorldPosResult] = Field(..., description="탐지된 객체들의 리스트")
