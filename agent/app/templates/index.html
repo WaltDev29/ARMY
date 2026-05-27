@@ -544,6 +544,12 @@
                 
                 if (configObj.VISION_URL) {
                     const img = document.getElementById('vision-stream');
+                    img.onerror = function() {
+                        console.error("Vision stream connection failed.");
+                        this.onerror = null;
+                        this.src = "";
+                        this.alt = "Vision Server Disconnected";
+                    };
                     img.src = configObj.VISION_URL + "/stream";
                 }
             } catch (e) {
@@ -551,16 +557,20 @@
             }
 
             // 로봇 상태 주기적 업데이트 (500ms)
-            setInterval(async () => {
+            let robotErrorCount = 0;
+            const robotInterval = setInterval(async () => {
                 try {
                     // 에이전트 서버 프록시를 통해 우회 (CORS 문제 해결)
                     const res = await fetch('/robot/state');
+                    if (!res.ok) throw new Error("HTTP error " + res.status);
                     const data = await res.json();
                     const stateDiv = document.getElementById('robot-state');
                     
                     if (data.error) {
                         stateDiv.innerHTML = `<div style="color: #ef4444;">Disconnected: ${data.error}</div>`;
+                        robotErrorCount++;
                     } else {
+                        robotErrorCount = 0; // 통신 성공 시 에러 카운트 초기화
                         // 로봇 API가 { success: true, data: { ee: {...}, joints: [...] } } 형태로 반환할 수 있음
                         const robotData = data.data || data;
                         const ee = robotData.ee || {};
@@ -573,7 +583,16 @@
                         `;
                     }
                 } catch (e) {
-                    // 통신 오류 시 조용히 무시 (재시도)
+                    robotErrorCount++;
+                    const stateDiv = document.getElementById('robot-state');
+                    stateDiv.innerHTML = `<div style="color: #ef4444;">Disconnected: Connection Error</div>`;
+                }
+
+                // 연속 3회 실패 시 요청 중단
+                if (robotErrorCount >= 3) {
+                    clearInterval(robotInterval);
+                    const stateDiv = document.getElementById('robot-state');
+                    stateDiv.innerHTML += `<div style="color: #ef4444; font-size: 0.85rem; margin-top: 8px;">(연결 실패로 요청 중단됨)</div>`;
                 }
             }, 500);
         }
