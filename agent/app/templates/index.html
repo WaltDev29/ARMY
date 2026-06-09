@@ -575,11 +575,18 @@
                         const robotData = data.data || data;
                         const ee = robotData.ee || {};
                         const joints = robotData.joints || [];
+                        
+                        let torqueDisplay = "Unknown";
+                        if (robotData.torque !== undefined) {
+                            torqueDisplay = robotData.torque ? '<span style="color: #4ade80;">ON (활성화)</span>' : '<span style="color: #ef4444;">OFF (해제됨)</span>';
+                        }
+                        
                         stateDiv.innerHTML = `
                             <div class="state-item"><span class="state-label">EE Position (m)</span></div>
                             <div class="state-item" style="padding-left: 10px;">X: ${(ee.x||0).toFixed(3)} | Y: ${(ee.y||0).toFixed(3)} | Z: ${(ee.z||0).toFixed(3)}</div>
                             <div class="state-item" style="margin-top: 15px;"><span class="state-label">Joints Angle (deg)</span></div>
                             <div class="state-item" style="padding-left: 10px;">[${joints.map(j => (j || 0).toFixed(2)).join(', ')}]</div>
+                            <div class="state-item" style="margin-top: 15px;"><span class="state-label">Torque:</span> ${torqueDisplay}</div>
                         `;
                     }
                 } catch (e) {
