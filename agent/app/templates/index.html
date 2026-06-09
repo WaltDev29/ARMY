@@ -395,9 +395,26 @@
             return { agentBubble, logContainer, logContent: content, answerContainer };
         }
 
+        let isProcessing = false;
+        let abortController = null;
+        
+        const sendSvg = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>';
+        const stopSvg = '<svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"></path></svg>';
+
         async function sendMessage() {
+            if (isProcessing) {
+                if (abortController) {
+                    abortController.abort();
+                }
+                return;
+            }
             const text = userInput.value.trim();
             if (!text) return;
+
+            isProcessing = true;
+            userInput.disabled = true;
+            sendBtn.innerHTML = stopSvg;
+            sendBtn.style.background = '#ef4444';
 
             addMessage(text, 'user');
             userInput.value = '';
@@ -413,12 +430,15 @@
             let agentBubble, logContainer, logContent, answerContainer;
             let isBubbleCreated = false;
 
+            abortController = new AbortController();
+
             try {
                 // Fetch 스트림 API 사용
                 const response = await fetch('/chat_stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
+                    body: JSON.stringify({ message: text }),
+                    signal: abortController.signal
                 });
 
                 const reader = response.body.getReader();
@@ -519,7 +539,11 @@
                     const bubbleElements = createAgentBubble();
                     answerContainer = bubbleElements.answerContainer;
                 }
-                answerContainer.innerHTML = '통신 오류가 발생했습니다.';
+                if (err.name === 'AbortError') {
+                    answerContainer.innerHTML = '🚫 명령 수행이 사용자에 의해 중단되었습니다.';
+                } else {
+                    answerContainer.innerHTML = '통신 오류가 발생했습니다.';
+                }
                 answerContainer.style.display = 'block';
             } finally {
                 if (isBubbleCreated) {
@@ -527,6 +551,12 @@
                 } else if (msgsDiv.contains(typingBubble)) {
                     msgsDiv.removeChild(typingBubble);
                 }
+                isProcessing = false;
+                abortController = null;
+                userInput.disabled = false;
+                sendBtn.innerHTML = sendSvg;
+                sendBtn.style.background = '';
+                userInput.focus();
             }
         }
 
