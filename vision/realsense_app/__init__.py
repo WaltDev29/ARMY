@@ -25,6 +25,16 @@ DEBUG = os.getenv("VISION_DEBUG", "false").lower() == "true"
 def create_app() -> FastAPI:
     app = FastAPI()
 
+    @app.on_event("startup")
+    async def startup_event():
+        # 서버 시작 시 모델들을 미리 로드하여 첫 접속 시 지연 방지
+        from .detection_manager import get_manager
+        from .segmentation_mask import get_segmentation_manager
+        print("Pre-loading vision models...")
+        get_manager()
+        get_segmentation_manager()
+        print("Vision models loaded successfully.")
+
     @app.on_event("shutdown")
     async def shutdown_event():
         # 앱 종료 시 카메라 리소스를 반환합니다.
