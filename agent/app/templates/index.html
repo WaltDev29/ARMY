@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ARMY Agent</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-        
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -133,8 +134,15 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .message.user {
@@ -284,19 +292,64 @@
             animation: bounce 1.4s infinite ease-in-out both;
         }
 
-        .dot:nth-child(1) { animation-delay: -0.32s; }
-        .dot:nth-child(2) { animation-delay: -0.16s; }
-
-        @keyframes bounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1); }
+        .dot:nth-child(1) {
+            animation-delay: -0.32s;
         }
 
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        .dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .mic-btn.recording {
+            background: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+
+            70% {
+                transform: scale(1.1);
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }
+        }
     </style>
 </head>
+
 <body>
     <div class="main-layout">
         <!-- 왼쪽 대시보드 영역 -->
@@ -304,11 +357,13 @@
             <!-- 비전 카메라 화면 -->
             <div class="dash-card vision-card">
                 <h3 class="dash-title">📷 Vision Stream</h3>
-                <div style="flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center;">
-                    <img id="vision-stream" src="" alt="Connecting to Vision Server..." style="width: 100%; height: 100%; object-fit: contain;" />
+                <div
+                    style="flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center;">
+                    <img id="vision-stream" src="" alt="Connecting to Vision Server..."
+                        style="width: 100%; height: 100%; object-fit: contain;" />
                 </div>
             </div>
-            
+
             <!-- 로봇 상태 정보 -->
             <div class="dash-card robot-card">
                 <h3 class="dash-title">🤖 Robot Status</h3>
@@ -328,8 +383,17 @@
             </div>
             <div class="chat-input">
                 <input type="text" id="userInput" placeholder="메시지를 입력하세요..." autocomplete="off">
+                <button id="micBtn" class="mic-btn" title="누르고 말하기">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                        <path
+                            d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                    </svg>
+                </button>
                 <button id="sendBtn">
-                    <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+                    </svg>
                 </button>
             </div>
         </div>
@@ -339,6 +403,102 @@
         const msgsDiv = document.getElementById('messages');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
+        const micBtn = document.getElementById('micBtn');
+
+        // TTS 기능
+        let currentUtterance = null;
+        let ttsInitialized = false;
+
+        if (window.speechSynthesis) {
+            // 크롬 등 일부 브라우저의 비동기 음성 로딩 대응
+            window.speechSynthesis.onvoiceschanged = () => {
+                window.speechSynthesis.getVoices();
+            };
+        }
+
+        function initTTS() {
+            if (!ttsInitialized && window.speechSynthesis) {
+                // 모바일 환경에서의 오디오 컨텍스트 활성화를 위해 더 확실한 초기화
+                const u = new SpeechSynthesisUtterance(' ');
+                u.volume = 0;
+                window.speechSynthesis.speak(u);
+                if (window.speechSynthesis.resume) {
+                    window.speechSynthesis.resume();
+                }
+                ttsInitialized = true;
+            }
+        }
+
+        function stopTTS() {
+            if (window.speechSynthesis && window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel();
+            }
+        }
+
+        function playTTS(text) {
+            if (!window.speechSynthesis) return;
+            stopTTS();
+            currentUtterance = new SpeechSynthesisUtterance(text);
+            currentUtterance.lang = 'ko-KR';
+            currentUtterance.rate = 1.2; // 기본 속도로 원복
+            window.speechSynthesis.speak(currentUtterance);
+        }
+
+        // STT 기능
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'ko-KR';
+            recognition.interimResults = true;
+            recognition.continuous = true;
+
+            let finalTranscript = '';
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                userInput.value = (finalTranscript + interimTranscript).trim();
+            };
+
+            const startRecording = (e) => {
+                e.preventDefault();
+                initTTS();
+                stopTTS();
+                if (isProcessing) return;
+                finalTranscript = userInput.value ? userInput.value + ' ' : '';
+                try { recognition.start(); } catch (e) { }
+                micBtn.classList.add('recording');
+            };
+
+            const stopRecording = (e) => {
+                e.preventDefault();
+                recognition.stop();
+                micBtn.classList.remove('recording');
+
+                // 인식 완료 후 텍스트가 있다면 바로 전송
+                setTimeout(() => {
+                    if (userInput.value.trim()) {
+                        sendMessage();
+                    }
+                }, 300); // 텍스트 렌더링을 위해 약간의 딜레이
+            };
+
+            micBtn.addEventListener('mousedown', startRecording);
+            micBtn.addEventListener('mouseup', stopRecording);
+            micBtn.addEventListener('mouseleave', (e) => {
+                if (micBtn.classList.contains('recording')) stopRecording(e);
+            });
+            micBtn.addEventListener('touchstart', startRecording, { passive: false });
+            micBtn.addEventListener('touchend', stopRecording, { passive: false });
+        } else {
+            micBtn.style.display = 'none';
+        }
 
         function scrollToBottom() {
             msgsDiv.scrollTop = msgsDiv.scrollHeight;
@@ -358,7 +518,7 @@
             // 전체를 감싸는 에이전트 말풍선
             const agentBubble = document.createElement('div');
             agentBubble.className = 'message agent';
-            
+
             // 1. 아코디언 로깅 컨테이너
             const logContainer = document.createElement('div');
             logContainer.className = 'log-container';
@@ -369,7 +529,7 @@
             header.innerHTML = '<span>사고 과정 보기</span><span>▼</span>';
 
             const content = document.createElement('div');
-            content.className = 'log-content streaming'; 
+            content.className = 'log-content streaming';
 
             header.addEventListener('click', () => {
                 if (content.classList.contains('streaming')) {
@@ -387,27 +547,31 @@
             // 2. 최종 답변 컨테이너
             const answerContainer = document.createElement('div');
             answerContainer.className = 'final-answer';
-            
+
             agentBubble.appendChild(logContainer);
             agentBubble.appendChild(answerContainer);
-            
+
             msgsDiv.appendChild(agentBubble);
             return { agentBubble, logContainer, logContent: content, answerContainer };
         }
 
         let isProcessing = false;
         let abortController = null;
-        
+
         const sendSvg = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>';
         const stopSvg = '<svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"></path></svg>';
 
         async function sendMessage() {
+            initTTS();
             if (isProcessing) {
                 if (abortController) {
                     abortController.abort();
                 }
                 return;
             }
+
+            stopTTS(); // 메시지 전송 시 기존 TTS 중지
+
             const text = userInput.value.trim();
             if (!text) return;
 
@@ -418,13 +582,13 @@
 
             addMessage(text, 'user');
             userInput.value = '';
-            
+
             // 로딩 모션 말풍선 생성
             const typingBubble = document.createElement('div');
             typingBubble.className = 'typing-bubble';
             typingBubble.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
             msgsDiv.appendChild(typingBubble);
-            
+
             scrollToBottom();
 
             let agentBubble, logContainer, logContent, answerContainer;
@@ -459,7 +623,7 @@
                                 const dataStr = line.substring(6);
                                 try {
                                     const data = JSON.parse(dataStr);
-                                    
+
                                     // 첫 응답 수신 시 로딩 모션 제거 및 메인 말풍선 생성
                                     if (!isBubbleCreated) {
                                         if (msgsDiv.contains(typingBubble)) {
@@ -472,16 +636,16 @@
                                         answerContainer = bubbleElements.answerContainer;
                                         isBubbleCreated = true;
                                     }
-                                    
+
                                     if (data.type === 'llm_chunk') {
                                         answerContainer.innerHTML += data.content.replace(/\n/g, '<br>');
                                         answerContainer.style.display = 'block';
                                         scrollToBottom();
-                                        
+
                                     } else if (data.type === 'tool_start') {
                                         // 로그 컨테이너 화면에 표시
                                         logContainer.style.display = 'flex';
-                                        
+
                                         // 방금 전까지 타이핑되던 텍스트는 사실 사고 과정이었으므로 위로 올림
                                         const reasoningText = answerContainer.innerHTML;
                                         if (reasoningText.trim() !== '') {
@@ -490,7 +654,7 @@
                                             p.innerHTML = '🤔 [사고 과정]<br>' + reasoningText;
                                             logContent.appendChild(p);
                                         }
-                                        
+
                                         // 영역 비우기
                                         answerContainer.innerHTML = '';
                                         answerContainer.style.display = 'none';
@@ -499,26 +663,31 @@
                                         pTool.className = 'log-item';
                                         pTool.textContent = `🔧 [도구 호출] ${data.name} (파라미터: ${data.args})`;
                                         logContent.appendChild(pTool);
-                                        
+
                                         logContent.scrollTop = logContent.scrollHeight;
                                         scrollToBottom();
-                                        
+
                                     } else if (data.type === 'tool_end') {
                                         const p = document.createElement('div');
                                         p.className = 'log-item';
                                         // 반환값 표시
                                         p.textContent = `✅ [도구 완료] ${data.name}\n결과: ${data.result}`;
                                         logContent.appendChild(p);
-                                        
+
                                         logContent.scrollTop = logContent.scrollHeight;
                                         scrollToBottom();
-                                        
+
                                     } else if (data.type === 'done') {
                                         // 스트리밍 종료 후 로그 창 닫기
                                         logContent.classList.remove('streaming');
-                                        logContent.classList.remove('finished'); 
+                                        logContent.classList.remove('finished');
                                         scrollToBottom();
-                                        
+
+                                        // 최종 응답 TTS 재생
+                                        if (answerContainer && answerContainer.innerText) {
+                                            playTTS(answerContainer.innerText);
+                                        }
+
                                     } else if (data.type === 'error') {
                                         answerContainer.innerHTML = '오류 발생: ' + data.content.replace(/\n/g, '<br>');
                                         answerContainer.style.display = 'block';
@@ -571,16 +740,16 @@
             try {
                 const res = await fetch('/config');
                 configObj = await res.json();
-                
+
                 if (configObj.VISION_URL) {
                     const img = document.getElementById('vision-stream');
-                    img.onerror = function() {
+                    img.onerror = function () {
                         console.error("Vision stream connection failed.");
                         this.onerror = null;
                         this.src = "";
                         this.alt = "Vision Server Disconnected";
                     };
-                    img.src = configObj.VISION_URL + "/stream";
+                    img.src = "/vision/stream";
                 }
             } catch (e) {
                 console.error("Failed to load config:", e);
@@ -595,7 +764,7 @@
                     if (!res.ok) throw new Error("HTTP error " + res.status);
                     const data = await res.json();
                     const stateDiv = document.getElementById('robot-state');
-                    
+
                     if (data.error) {
                         stateDiv.innerHTML = `<div style="color: #ef4444;">Disconnected: ${data.error}</div>`;
                         robotErrorCount++;
@@ -605,15 +774,15 @@
                         const robotData = data.data || data;
                         const ee = robotData.ee || {};
                         const joints = robotData.joints || [];
-                        
+
                         let torqueDisplay = "Unknown";
                         if (robotData.torque !== undefined) {
                             torqueDisplay = robotData.torque ? '<span style="color: #4ade80;">ON (활성화)</span>' : '<span style="color: #ef4444;">OFF (해제됨)</span>';
                         }
-                        
+
                         stateDiv.innerHTML = `
                             <div class="state-item"><span class="state-label">EE Position (m)</span></div>
-                            <div class="state-item" style="padding-left: 10px;">X: ${(ee.x||0).toFixed(3)} | Y: ${(ee.y||0).toFixed(3)} | Z: ${(ee.z||0).toFixed(3)}</div>
+                            <div class="state-item" style="padding-left: 10px;">X: ${(ee.x || 0).toFixed(3)} | Y: ${(ee.y || 0).toFixed(3)} | Z: ${(ee.z || 0).toFixed(3)}</div>
                             <div class="state-item" style="margin-top: 15px;"><span class="state-label">Joints Angle (deg)</span></div>
                             <div class="state-item" style="padding-left: 10px;">[${joints.map(j => (j || 0).toFixed(2)).join(', ')}]</div>
                             <div class="state-item" style="margin-top: 15px;"><span class="state-label">Torque:</span> ${torqueDisplay}</div>
@@ -637,4 +806,5 @@
         initDashboard();
     </script>
 </body>
+
 </html>

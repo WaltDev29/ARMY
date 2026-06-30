@@ -50,13 +50,30 @@ async def get_config():
         "BOT_URL": app_config.BOT_URL
     }
 
+import httpx
+
 @app.get("/robot/state")
 async def get_robot_state_proxy():
     try:
-        resp = requests.get(f"{app_config.BOT_URL}/robot/state", timeout=3.0)
-        return resp.json()
+        endpoint = "/robot/state" if app_config.DOFBOT else "/robot_state"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{app_config.BOT_URL}{endpoint}", timeout=3.0)
+            resp.raise_for_status()
+            return resp.json()
     except Exception as e:
         return {"error": str(e), "ee": {"x": 0, "y": 0, "z": 0}, "joints": [0,0,0,0,0,0]}
+
+@app.get("/vision/stream")
+async def get_vision_stream_proxy():
+    async def generate():
+        async with httpx.AsyncClient() as client:
+            try:
+                async with client.stream("GET", f"{app_config.VISION_URL}/stream", timeout=10.0) as response:
+                    async for chunk in response.aiter_bytes():
+                        yield chunk
+            except Exception:
+                pass
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 @app.post("/chat_stream")
 async def chat_stream(req: ChatRequest):
