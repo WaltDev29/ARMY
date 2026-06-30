@@ -190,5 +190,7 @@ def generate_frames():
                 b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
                 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Stream error: {e}")
             break

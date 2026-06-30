@@ -74,7 +74,15 @@ class DetectionManager:
                 # xywh 포맷 [center x, center y, width, height]
                 x, y, w, h = box.xywh[0].tolist()
                 cls_id = int(box.cls[0].item())
-                class_name = result.names[cls_id]
+                
+                # result.names가 리스트일 수도 있고 딕셔너리일 수도 있으므로 안전하게 접근
+                if isinstance(result.names, dict):
+                    class_name = result.names.get(cls_id, f"unknown_{cls_id}")
+                elif isinstance(result.names, list):
+                    class_name = result.names[cls_id] if cls_id < len(result.names) else f"unknown_{cls_id}"
+                else:
+                    class_name = f"unknown_{cls_id}"
+                    
                 conf = float(box.conf[0].item())
 
                 detections.append({
