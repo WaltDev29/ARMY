@@ -347,6 +347,63 @@
                 box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
             }
         }
+
+        /* 모바일 반응형 미디어 쿼리 추가 */
+        @media (max-width: 800px) {
+            body {
+                height: 100dvh;
+                /* 모바일 하단바 대응 */
+                padding: 10px;
+                display: block;
+                overflow-y: auto;
+                /* 전체 화면 스크롤 허용 */
+            }
+
+            .main-layout {
+                flex-direction: column;
+                width: 100%;
+                height: auto;
+                min-height: 100%;
+                gap: 15px;
+            }
+
+            .dashboard-panel {
+                min-width: 100%;
+                flex: none;
+                gap: 15px;
+            }
+
+            .vision-card {
+                min-height: 250px;
+                flex: none;
+            }
+
+            .robot-card {
+                /* 모바일에서는 로봇 상태창 높이 축소 */
+                min-height: 180px;
+                flex: none;
+            }
+
+            .chat-container {
+                min-width: 100%;
+                min-height: 500px;
+                flex: none;
+            }
+
+            .chat-header {
+                padding: 12px;
+                font-size: 1.1rem;
+            }
+
+            .chat-input {
+                padding: 12px;
+            }
+
+            .message {
+                max-width: 95%;
+                /* 모바일에서는 말풍선을 넓게 사용 */
+            }
+        }
     </style>
 </head>
 
@@ -440,7 +497,7 @@
             stopTTS();
             currentUtterance = new SpeechSynthesisUtterance(text);
             currentUtterance.lang = 'ko-KR';
-            currentUtterance.rate = 1.2; // 기본 속도로 원복
+            currentUtterance.rate = 1.1; // 기본 속도로 원복
             window.speechSynthesis.speak(currentUtterance);
         }
 
