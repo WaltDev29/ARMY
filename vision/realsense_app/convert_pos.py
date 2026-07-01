@@ -92,8 +92,12 @@ def _get_object_pos(target_classes=None):
         # 하나라도 못 찾은 게 있다면 YOLO-World (Fallback) 가동
         if missing_targets:
             # logger.info(f"YOLO-World 가동 (누락 타겟: {missing_targets})")
-            world_objects = detect_objects(rgb_image, prompt=missing_targets)
-            standard_filtered.extend(world_objects)
+            # YOLO-World의 오탐(False Positive) 방지를 위해 conf_threshold를 0.4로 상향
+            world_objects = detect_objects(rgb_image, prompt=missing_targets, conf_threshold=0.4)
+            
+            # YOLO-World가 버그로 인해 프롬프트 외의 객체(전체 객체)를 반환할 수 있으므로 안전 필터링 추가
+            filtered_world = [obj for obj in world_objects if obj["class_name"].lower().strip() in cleaned_targets]
+            standard_filtered.extend(filtered_world)
             
         detected_objects = standard_filtered
 
