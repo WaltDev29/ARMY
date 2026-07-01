@@ -20,9 +20,9 @@ class DetectionManager:
             self.standard_model = YOLO(BASE_DIR / 'models' / 'yolo11s.pt')
             
             # 2. YOLO-World 모델 로드 (Open-Vocabulary용)
-            # 모델이 없으면 자동으로 다운로드됩니다. (yolov8s-world.pt 또는 yolov8m-world.pt 사용 가능)
+            # 모델이 없으면 자동으로 다운로드됩니다. (yolov8s-world.pt, yolov8m-world.pt, yolov8l-world.pt 등)
             logger.info("YOLO-World 모델 로딩 중...")
-            self.world_model = YOLOWorld(BASE_DIR / 'models' / 'yolov8s-world.pt') 
+            self.world_model = YOLOWorld(BASE_DIR / 'models' / 'yolov8l-worldv2.pt') 
             
             # 3. 장치 설정 (CUDA 사용 권장)
             import torch
@@ -83,6 +83,14 @@ class DetectionManager:
                 else:
                     class_name = f"unknown_{cls_id}"
                     
+                # [버그 픽스] YOLO-World가 기존 COCO 80개 클래스 뒤에 새 클래스를 붙여서 cls_id=80 등으로 반환하는 경우 우회
+                if class_name.startswith("unknown_") and prompt is not None:
+                    offset_id = cls_id - 80
+                    if 0 <= offset_id < len(prompt):
+                        class_name = prompt[offset_id]
+                    elif 0 <= cls_id < len(prompt):
+                        class_name = prompt[cls_id]
+
                 conf = float(box.conf[0].item())
 
                 detections.append({
