@@ -191,6 +191,8 @@
     </div>
 
     <script>
+        let isFirstLoad = true;
+        
         // 현재 타겟 목록 불러오기
         async function fetchCurrentTargets() {
             try {
@@ -198,9 +200,10 @@
                 const data = await response.json();
                 renderTags(data.targets);
                 
-                // 입력창에도 세팅
-                if(data.targets && data.targets.length > 0) {
+                // 입력창 세팅은 페이지 최초 로딩 시에만 실행 (타이핑 중 덮어씌워짐 방지)
+                if(isFirstLoad && data.targets && data.targets.length > 0) {
                     document.getElementById('target-input').value = data.targets.join(', ');
+                    isFirstLoad = false;
                 }
             } catch (error) {
                 console.error("Failed to fetch targets:", error);
