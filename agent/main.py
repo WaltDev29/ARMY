@@ -18,8 +18,10 @@ from langchain.messages import HumanMessage
 app = FastAPI(title="ARMY Agent Web UI")
 
 agent = create_agent()
+# runtime config passed into agent.invoke / agent.astream_events
 config = {
-    "configurable": {"thread_id": "user1"}
+    "configurable": {"thread_id": "user1"},
+    "recursion_limit": app_config.RECURSION_LIMIT,
 }
 
 # 템플릿 경로 설정
