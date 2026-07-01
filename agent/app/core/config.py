@@ -16,6 +16,8 @@ class Config(BaseModel):
     DOFBOT:bool = str(os.getenv("DOFBOT", "False")).lower() == "true"
     LLM_MODEL:str = os.getenv("LLM_MODEL")
     LLM_BASE_URL:str = os.getenv("LLM_BASE_URL")
+    # Maximum allowed recursion depth for LangGraph execution (increase if needed)
+    RECURSION_LIMIT: int = int(os.getenv("RECURSION_LIMIT", "100"))
 
 config = Config()
 

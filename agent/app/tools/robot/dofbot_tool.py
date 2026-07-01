@@ -18,7 +18,7 @@ get_robot_state_tool = tool(
         "로봇팔의 현재 상태를 반환합니다. "
         "반환값: ee(손끝 위치, 단위 m, {'x':float,'y':float,'z':float}), "
         "joints(각 관절 각도 deg 리스트, 예: [0.0, 1.57, -1.57, 0.0, 1.57, 0.0])"
-        "joints의 마지막 값은 그리퍼의 각도입니다. 170은 닫힘, 10은 열림을 나타냅니다."
+        "joints의 마지막 값은 그리퍼의 각도입니다. 180은 닫힘, 10은 열림을 나타냅니다."
     )
 )
 
@@ -47,7 +47,7 @@ set_pos_tool = tool(
 
 # Set Gripper
 class SetGripperCmd(BaseModel):
-    value: float # 10~170
+    value: float # 10~180
 
 def set_gripper(value: float) -> Dict[str, Any]:
     resp = requests.post(f"{config.BOT_URL}/robot/set_gripper", json={"gripper": value})
@@ -59,8 +59,8 @@ set_gripper_tool = tool(
     description="""
     그리퍼를 열거나 닫습니다.
     입력값 value는 그리퍼의 상태를 나타냅니다.
-    170은 완전히 닫힌 상태, 10은 완전히 열린 상태를 나타냅니다.
-    10 미만, 170 이상의 값은 오류를 반환합니다.
+    180은 완전히 닫힌 상태, 10은 완전히 열린 상태를 나타냅니다.
+    10 미만, 180 이상의 값은 오류를 반환합니다.
     """,
     args_schema=SetGripperCmd
 )
