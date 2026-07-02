@@ -36,6 +36,15 @@ reset_targets_tool = tool(
     """
 )
 
+from pydantic import BaseModel, Field
+from typing import Optional, List
+
+class DetectCmd(BaseModel):
+    targets: Optional[List[str]] = Field(
+        default=None, 
+        description="찾고자 하는 특정 객체의 이름 리스트 (예: ['apple', 'red block'])."
+    )
+
 realsense_detect_tool = tool(
     get_realsense_detections,
     description="""
@@ -56,7 +65,8 @@ realsense_detect_tool = tool(
             }
         ]
     }
-    """
+    """,
+    args_schema=DetectCmd
 )
 
 tools = [
