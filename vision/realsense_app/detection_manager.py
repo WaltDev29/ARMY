@@ -56,7 +56,12 @@ class DetectionManager:
             
             if prompt != self.current_world_classes:
                 logger.info(f"YOLO-World 클래스 재설정: {prompt}")
-                self.world_model.set_classes(prompt)
+                # [버그 픽스] 사람(person) 등 COCO 기본 객체를 새 프롬프트로 오인식(라벨 밀림)하는 현상 방지
+                # 기존 80개 COCO 클래스를 배경 지식(Background classes)으로 선행 주입
+                coco_classes = list(self.standard_model.names.values())
+                combined_prompt = coco_classes + prompt
+                
+                self.world_model.set_classes(combined_prompt)
                 self.current_world_classes = prompt
             
             results = self.world_model.predict(image, conf=conf_threshold, verbose=False, device=self.device)
