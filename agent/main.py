@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 
+import asyncio
+from langchain_core.messages import ToolMessage
 from app import create_agent
 from app.core.config import config as app_config
 from langchain.messages import HumanMessage
@@ -106,6 +108,16 @@ async def chat_stream(req: ChatRequest):
             # 스트리밍 완료
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
+        except asyncio.CancelledError:
+            # 클라이언트 강제 종료 시 메모리 상태 복구 (dangling tool_calls 에러 방지)
+            state = agent.get_state(config)
+            messages = state.values.get("messages", [])
+            if messages and hasattr(messages[-1], "tool_calls") and messages[-1].tool_calls:
+                dummy_messages = []
+                for tc in messages[-1].tool_calls:
+                    dummy_messages.append(ToolMessage(content="강제 중지됨.", tool_call_id=tc["id"], name=tc["name"]))
+                agent.update_state(config, {"messages": dummy_messages})
+            raise
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
             
