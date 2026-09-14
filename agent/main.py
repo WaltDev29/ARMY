@@ -68,9 +68,10 @@ async def get_robot_state_proxy():
 @app.get("/vision/stream")
 async def get_vision_stream_proxy():
     async def generate():
+        stream_url = f"{app_config.VISION_URL}/stream" if app_config.DOFBOT else f"{app_config.BOT_URL}/"
         async with httpx.AsyncClient() as client:
             try:
-                async with client.stream("GET", f"{app_config.VISION_URL}/stream", timeout=10.0) as response:
+                async with client.stream("GET", stream_url, timeout=10.0) as response:
                     async for chunk in response.aiter_bytes():
                         yield chunk
             except Exception:

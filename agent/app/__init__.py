@@ -34,7 +34,7 @@ def create_agent():
     llm = ChatOpenAI(
         model=config.LLM_MODEL,
         base_url=config.LLM_BASE_URL,
-        api_key="",
+        api_key=config.LLM_API_KEY,
         default_headers={
             "User-Agent": "Mozilla/5.0"
         }
