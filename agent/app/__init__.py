@@ -10,7 +10,8 @@ from .core.config import config
 
 
 def _load_system_prompt() -> str:
-    prompt_path = Path(__file__).resolve().parent / "prompts" / "system_dofbot.md"
+    prompt_file = "system_dofbot.md" if config.DOFBOT else "system_pybullet.md"
+    prompt_path = Path(__file__).resolve().parent / "prompts" / prompt_file
     if not prompt_path.exists():
         return ""
     return prompt_path.read_text(encoding="utf-8")
