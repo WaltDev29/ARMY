@@ -18,7 +18,7 @@ latest_frame_depth = None
 
 # ============ 로봇 정보 (Sim -> Flask) ============
 robot_state = {"x": 0.0, "y": 0.0, "z": 0.0}
-joints_degrees = [0, 0, 0, 0, 0]
+joints_degrees = [0, 0, 0, 0, 0, 0.0]
 
 
 # ============ 오브젝트 정보 (Sim -> Flask) ============

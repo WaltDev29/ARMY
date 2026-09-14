@@ -8,30 +8,6 @@ from ..vision.convert_pos import _pixel_to_camera, _camera_to_world
 
 
 # ============ GET ============
-class GetImageCmd(BaseModel):
-    pass
-
-def get_image() -> bytes:
-    resp = requests.get(f"{config.BOT_URL}/image")
-    resp.raise_for_status()
-    return resp.content
-
-
-get_image_tool = tool(
-    get_image,
-    description="""
-    카메라에서 이미지를 반환받습니다.
-    """,
-    args_schema=GetImageCmd
-)
-
-
-def get_depth() -> List[Any]:
-    resp = requests.get(f"{config.BOT_URL}/depth")
-    resp.raise_for_status()
-    return resp.json()
-
-
 def get_robot_state() -> dict[str, Any]:
     resp = requests.get(f"{config.BOT_URL}/robot_state") # {"ee": ee, "joints": joints}
     resp.raise_for_status()
@@ -46,7 +22,7 @@ get_robot_state_tool = tool(
     description=(
         "로봇팔의 현재 상태를 반환합니다. "
         "반환값: ee(손끝 위치, 단위 m, {'x':float,'y':float,'z':float}), "
-        "joints(각 관절 각도 deg 리스트, 예: [0.0, 1.57, -1.57, 0.0, 1.57, 0.0])"
+        "joints(5개 관절 각도(deg)와 마지막 6번째는 그리퍼 상태값(0.0~0.06)을 포함한 총 6개의 요소 리스트, 예: [0.0, 1.57, -1.57, 0.0, 1.57, 0.06])"
     ),
     args_schema=GetRobotStateCmd
 )
@@ -71,6 +47,112 @@ get_object_state_tool = tool(
     ),
     args_schema=GetObjectStateCmd
 )
+
+
+
+
+
+
+class GetImageCmd(BaseModel):
+    pass
+
+def _get_image() -> bytes:
+    resp = requests.get(f"{config.BOT_URL}/image")
+    resp.raise_for_status()
+    return resp.content
+
+
+def _get_depth() -> List[Any]:
+    resp = requests.get(f"{config.BOT_URL}/depth")
+    resp.raise_for_status()
+    return resp.json()
+
+
+
+# ============ yolo로 추론한 오브젝트의 중앙 좌표로 depth 거리 반환 ============
+def _get_depth_value(depth, x, y, k=2):
+    depth = np.array(depth)
+    h, w = depth.shape
+
+    x = int(np.clip(x, 0, w-1))
+    y = int(np.clip(y, 0, h-1))
+
+    patch = depth[y-k:y+k+1, x-k:x+k+1]
+
+    valid = patch[patch > 0]
+
+    if len(valid) == 0:
+        return None
+
+    return float(np.mean(valid))
+
+
+
+# ============ 카메라로부터 이미지의 중앙 좌표 반환  ============
+def _get_camera():
+    """
+    오브젝트를 잡기 위한 초기 단계: 이미지 가져오기, distance 가져오기, 객체 탐지 및 중앙 좌표 계산.
+    """
+    # 1. pybullet_tool.py의 _get_image() 함수로 이미지를 가져옴
+    img = _get_image()
+
+    # 2. _get_depth() 함수로 depth 정보를 가져옴
+    depth = _get_depth()
+
+    # 3. config.VISION_URL + "/detect_from_image" 경로에 Post 요청을 보냄 (body는 이미지)
+    files = {
+        'data': ('image.jpg', img, 'image/jpeg')
+    }
+    response = requests.post(
+        config.VISION_URL + "/detect_from_image",
+        files=files
+    )
+    detections = response.json()
+
+    center_x = None
+    center_y = None
+
+    # 4. 반환받은 오브젝트의 중앙 좌표를 대입
+    if detections["objects"]:
+        # 첫 번째 오브젝트의 바운딩 박스 사용 (가정)
+        box = detections["objects"][0]['xywh']  # [x, y, w, h]
+        center_x = int(box[0])  # 픽셀단위
+        center_y = int(box[1])  # 픽셀단위
+
+        # yolo로 추론한 오브젝트의 중앙 좌표의 depth 데이터 추출
+        center_z = _get_depth_value(depth, center_x, center_y)
+
+        return {'center_x': center_x, 'center_y': center_y, "center_z": center_z}
+    else:
+        return None
+
+
+
+# ============ 월드 좌표계 기준 오브젝트 위치 반환 ============
+class GetVisionObjectPosCmd(BaseModel):
+    pass
+
+def get_vision_object_pos() -> dict:
+    object_xyz = _get_camera()
+    if object_xyz is None: return {"error": "오브젝트를 찾지 못했습니다."}
+
+    pc = _pixel_to_camera(**object_xyz, cam_width=720, cam_height=720)
+    if pc is None: return {"error": "카메라 좌표 변환 실패."}
+
+    pw = _camera_to_world(pc, camera_pos=[0.5, 0, 0.5], target=[0,0,0], up=[0,0,1])
+
+    return {"x": float(pw[0]), "y": float(pw[1]), "z": float(pw[2])}
+
+get_vision_object_pos_tool = tool(
+    get_vision_object_pos,
+    description="""
+    카메라 이미지(Vision)를 바탕으로 씬에 있는 주요 객체를 탐지하고 해당 객체의 월드 좌표계 기준 절대 좌표(x, y, z)를 계산하여 반환합니다.
+    (주의: 시각 추론 기반이므로 실제 위치와 약간의 오차가 존재할 수 있습니다.)
+    반환값: {"x": float, "y": float, "z": float}
+    """,
+    args_schema=GetVisionObjectPosCmd
+)
+
 
 
 
@@ -109,8 +191,8 @@ set_joints_tool = tool(
     set_joints,
     description="""
     로봇의 관절을 지정된 각도로 이동시킵니다.
-    입력값 joints는 각 관절의 각도(deg)를 나타낸 리스트입니다.
-    예시: [0.0, 1.57, -1.57, 0.0, 1.57, 0.0]
+    입력값 joints는 5개 관절의 각도(deg)를 나타낸 리스트여야 합니다.
+    예시: [0.0, 1.57, -1.57, 0.0, 1.57]
     """,
     args_schema=SetJointsCmd
 )
@@ -135,86 +217,11 @@ set_gripper_tool = tool(
 )
 
 
-# ============ yolo로 추론한 오브젝트의 중앙 좌표로 depth 거리 반환 ============
-def _get_depth_value(depth, x, y, k=2):
-    depth = np.array(depth)
-    h, w = depth.shape
-
-    x = int(np.clip(x, 0, w-1))
-    y = int(np.clip(y, 0, h-1))
-
-    patch = depth[y-k:y+k+1, x-k:x+k+1]
-
-    valid = patch[patch > 0]
-
-    if len(valid) == 0:
-        return None
-
-    return float(np.mean(valid))
-
-
-
-# ============ 카메라로부터 이미지의 중앙 좌표 반환  ============
-def _get_camera():
-    """
-    오브젝트를 잡기 위한 초기 단계: 이미지 가져오기, distance 가져오기, 객체 탐지 및 중앙 좌표 계산.
-    """
-    # 1. pybullet_tool.py의 get_image() 함수로 이미지를 가져옴
-    img = get_image()
-
-    # 2. get_depth() 함수로 depth 정보를 가져옴
-    depth = get_depth()
-
-    # 3. config.VISION_URL + "/detect_from_image" 경로에 Post 요청을 보냄 (body는 이미지)
-    files = {
-        'data': ('image.jpg', img, 'image/jpeg')
-    }
-    response = requests.post(
-        config.VISION_URL + "/detect_from_image",
-        files=files
-    )
-    detections = response.json()
-
-    center_x = None
-    center_y = None
-
-    # 4. 반환받은 오브젝트의 중앙 좌표를 대입
-    if detections["objects"]:
-        # 첫 번째 오브젝트의 바운딩 박스 사용 (가정)
-        box = detections["objects"][0]['xywh']  # [x, y, w, h]
-        center_x = int(box[0])  # 픽셀단위
-        center_y = int(box[1])  # 픽셀단위
-
-        # yolo로 추론한 오브젝트의 중앙 좌표의 depth 데이터 추출
-        center_z = _get_depth_value(depth, center_x, center_y)
-
-        return {'center_x': center_x, 'center_y': center_y, "center_z": center_z}
-    else:
-        return None
-
-
-
-
-
-
-
-# ============ 월드 좌표계 기준 오브젝트 위치 반환 ============
-def _get_object_pos():
-    object_xyz = _get_camera()
-    if object_xyz is None: return None
-
-    pc = _pixel_to_camera(**object_xyz, cam_width=720, cam_height=720)
-    if pc is None: return None
-
-    pw = _camera_to_world(pc, camera_pos=[0.5, 0, 0.5], target=[0,0,0], up=[0,0,1])
-
-    return pw
-
-
-
 tools = [
     get_robot_state_tool,
-    get_object_state_tool,
+    # get_object_state_tool, # vision 모듈 없이 테스트할 경우 사용
     set_pos_tool,
-    set_gripper_tool
+    set_joints_tool,
+    set_gripper_tool,
+    get_vision_object_pos_tool
 ]

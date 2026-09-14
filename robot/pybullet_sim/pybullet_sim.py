@@ -278,6 +278,9 @@ def run_simulation():
         
         # ============ Joints ============
         joints = [round(np.degrees(p.getJointState(robot_id, j)[0]), 2) for j in arm_joints]
+        # 그리퍼 값 추가 (0.0 ~ 0.06)
+        gripper_val = p.getJointState(robot_id, gripper_joints[0])[0] * 2
+        joints.append(round(gripper_val, 4))
 
         # ============ Object Info ============
         obj_data = {"exists": False, "x": 0, "y": 0, "z": 0, "distance": 0}
