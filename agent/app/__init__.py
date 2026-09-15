@@ -38,7 +38,8 @@ def create_agent():
         api_key=config.LLM_API_KEY,
         default_headers={
             "User-Agent": "Mozilla/5.0"
-        }
+        },
+        reasoning_effort="none"
     )
 
     # ============ Memory 정의 ============
