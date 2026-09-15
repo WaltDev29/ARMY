@@ -222,9 +222,9 @@ set_gripper_tool = tool(
 
 tools = [
     get_robot_state_tool,
-    # get_object_state_tool, # vision 모듈 없이 테스트할 경우 사용
+    get_object_state_tool, # vision 모듈 없이 테스트할 경우 사용
     set_pos_tool,
     set_joints_tool,
     set_gripper_tool,
-    get_vision_object_pos_tool
+    # get_vision_object_pos_tool
 ]

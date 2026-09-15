@@ -49,5 +49,5 @@ detect_objects_from_image_tool = tool(
 
 
 tools = [
-    detect_objects_from_image_tool
+    # detect_objects_from_image_tool # 비전 Tool 사용 테스트용
     ]
