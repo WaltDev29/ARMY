@@ -20,9 +20,13 @@ flowchart TD
     Robot -.->|관절 제어| HW[실제 Dofbot or PyBullet GUI]
 ```
 
-- **[AI 에이전트 모듈 (`agent/`)](file:///d:/project/ARMY_agent/agent)** (Port `8000`): LangGraph 기반 에이전트 서버. 사용자 자연어 명령을 분석하고 적절한 도구(비전 탐색, 로봇 모션 제어)를 호출하여 피드백 제공.
-- **[로봇 제어 모듈 (`robot/`)](file:///d:/project/ARMY_agent/robot)** (Port `5000`): PyBullet 가상 시뮬레이터 또는 물리 Dofbot 하드웨어와 통신하는 제어 서버 (Flask/SocketIO).
-- **[비전 모듈 (`vision/`)](file:///d:/project/ARMY_agent/vision)** (Port `8001`): YOLOv11(상시 탐지), YOLO-World(Open-Vocabulary 탐색), FastSAM(세그멘테이션) 및 Depth 기반 3D 좌표 변환 서버 (FastAPI).
+- **[AI 에이전트 모듈 (`agent/`)](file:///d:/project/ARMY_agent/agent)** (Port `8000`): LangGraph 기반 에이전트 서버. 사용자 자연어 명령을 분석하고 비전 및 로봇 제어 도구를 호출하여 결과 반환.
+- **[로봇 시뮬레이션 모듈 (`robot/`)](file:///d:/project/ARMY_agent/robot)** (Port `5000`): PyBullet 가상 시뮬레이터 제어 서버 (Flask/SocketIO).
+- **[비전 모듈 (`vision/`)](file:///d:/project/ARMY_agent/vision)** (Port `8001`): YOLOv11, YOLO-World, FastSAM 기반 객체 탐지 및 3D 좌표 변환 서버 (FastAPI).
+
+> [!NOTE]
+> 본 저장소의 `robot/` 디렉토리는 **PyBullet 가상 시뮬레이션 전용**입니다.  
+> 실제 물리 DOFBot 제어 코드는 **[DOFBOT_ROBOT_ARM](https://github.com/dangdang122/DOFBOT_ROBOT_ARM)** 레포지토리에서 관리되며, 로봇 본체(SBC/보드)에서 별도 구동 후 본 시스템(`agent`)과 네트워크(`BOT_URL`)를 통해 연동됩니다.
 
 <br>
 
@@ -42,49 +46,43 @@ flowchart TD
 
 ## ⚙️ 환경 설정 (Environment Setup)
 
-프로젝트 루트 및 각 모듈 디렉토리에 제공되는 예시 파일(`.env.example`)을 참고하여 환경변수 파일(`.env`)을 생성합니다.
+프로젝트 루트 및 비전 모듈 디렉토리에 제공되는 `.env.example`을 복사하여 `.env` 파일을 생성합니다.
 
 ### 1. 루트 환경변수 설정 (`.env`)
-환경에 맞춰 예시 파일을 `.env`로 복사한 후 필요한 값(API 키, 서버 주소 등)을 설정합니다.
+루트 디렉토리의 `.env.example`을 복사하여 `.env`를 생성하고, 구동 환경(PyBullet 시뮬레이션 또는 실제 DOFBot) 및 LLM 설정을 진행합니다.
 
-- **PyBullet 시뮬레이션 환경 사용 시 (기본 권장):**
-  ```bash
-  # Windows PowerShell
-  Copy-Item .env.pybullet.example .env
-  
-  # Linux / macOS
-  cp .env.pybullet.example .env
-  ```
-  `.env` 예시:
-  ```env
-  DOFBOT=False
-  VISION_URL=http://localhost:8001
-  BOT_URL=http://localhost:5000
-  LLM_MODEL=gpt-4o-mini
-  LLM_BASE_URL=
-  API_KEY=your_openai_api_key_here
-  ```
+```bash
+# Windows PowerShell
+Copy-Item .env.example .env
 
-- **실제 Dofbot 하드웨어 환경 사용 시:**
-  ```bash
-  # Windows PowerShell
-  Copy-Item .env.dofbot.example .env
-  
-  # Linux / macOS
-  cp .env.dofbot.example .env
-  ```
-  `.env` 예시:
-  ```env
-  DOFBOT=True
-  VISION_URL=http://localhost:8001
-  BOT_URL=http://192.168.25.100:5000   # 실제 로봇 보드 IP
-  LLM_MODEL=gpt-4o-mini
-  LLM_BASE_URL=
-  API_KEY=your_openai_api_key_here
-  ```
+# Linux / macOS
+cp .env.example .env
+```
+
+`.env` 설정 옵션:
+```env
+# ==========================================
+# Mode Selection
+# ==========================================
+# True: Physical DOFBot Hardware, False: PyBullet Simulation
+DOFBOT=False
+
+# ==========================================
+# Service URLs
+# ==========================================
+VISION_URL=http://localhost:8001
+BOT_URL=http://localhost:5000
+
+# ==========================================
+# LLM Configurations
+# ==========================================
+LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=
+API_KEY=your_openai_api_key_here
+```
 
 ### 2. 비전 모듈 환경변수 설정 (`vision/.env`)
-비전 모듈 디렉토리로 이동하여 예시 파일을 복사합니다.
+비전 모듈 디렉토리로 이동하여 `.env.example`을 복사합니다.
 ```bash
 # vision 디렉토리 내에서
 cd vision
@@ -94,7 +92,7 @@ cd ..
 `vision/.env` 설정값:
 ```env
 VISION_DEBUG=False
-REALSENSE=False   # PyBullet/웹캠 환경: False, RealSense Depth 카메라 연결 시: True
+REALSENSE=False   # PyBullet 환경: False, RealSense Depth 카메라 연결 시: True
 ```
 
 <br>
@@ -138,10 +136,38 @@ REALSENSE=False   # PyBullet/웹캠 환경: False, RealSense Depth 카메라 연
 
 ### 🦾 B. 실제 DOFBot 하드웨어 모드로 실행
 
-1. **로봇 본체:** Dofbot 보드에서 로봇 제어 서버 구동
-2. **비전 서버:** `vision/.env`에서 `REALSENSE=True` 설정 후 `python vision/main.py` 실행
-3. **루트 환경변수:** `.env`에서 `DOFBOT=True` 및 `BOT_URL=http://<로봇_IP>:5000` 설정
-4. **에이전트 구동:** `python agent/main.py` 실행 후 [http://localhost:8000](http://localhost:8000) 접속
+1. **로봇 본체 제어 서버 구동 (DOFBot 보드)**
+   - 실제 물리 로봇 제어 코드는 별도 레포지토리로 관리됩니다: **[DOFBOT_ROBOT_ARM (GitHub)](https://github.com/dangdang122/DOFBOT_ROBOT_ARM)**
+   - 로봇 보드(라즈베리파이 등)에 접속하여 위 레포지토리를 클론하고 Socket.IO 제어 서버를 실행합니다:
+     ```bash
+     # DOFBot 로봇 보드 내부에서 실행
+     git clone https://github.com/dangdang122/DOFBOT_ROBOT_ARM.git
+     cd DOFBOT_ROBOT_ARM
+     python main.py  # 5000번 포트 구동
+     ```
+2. **비전 서버 구동 (PC)**
+   - RealSense Depth 카메라를 PC에 연결합니다.
+   - `vision/.env`에서 `REALSENSE=True`로 변경 후 실행합니다:
+     ```bash
+     cd vision
+     conda activate vision
+     python main.py  # 8001번 포트 구동
+     ```
+3. **루트 환경변수 설정 (`.env`)**
+   - 루트의 `.env` 파일에서 `DOFBOT=True` 및 `BOT_URL`에 로봇 보드의 IP를 입력합니다:
+     ```env
+     DOFBOT=True
+     VISION_URL=http://localhost:8001
+     BOT_URL=http://<로봇_보드_IP>:5000
+     ```
+4. **AI 에이전트 구동 (PC)**
+   - 에이전트 서버를 실행하고 브라우저로 대시보드에 접속합니다:
+     ```bash
+     cd agent
+     conda activate agent
+     python main.py  # 8000번 포트 구동
+     ```
+   - 접속 URL: [http://localhost:8000](http://localhost:8000)
 
 <br>
 
