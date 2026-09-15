@@ -1,6 +1,23 @@
 # ARMY Agent (Agentic Robot Manipulation System)
 
-<video src="https://github.com/user-attachments/assets/10ca680a-55d9-4ad0-b068-b5576885be9d" width="100%" autoplay loop muted playsinline></video>
+<table align="center" width="100%">
+  <thead>
+    <tr>
+      <th align="center" width="50%">DOFBot</th>
+      <th align="center" width="50%">PyBullet</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/10ca680a-55d9-4ad0-b068-b5576885be9d" autoplay loop muted playsinline width="100%"></video>
+      </td>
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/2b9c8418-c02c-4fb9-8d62-0df393badf25" autoplay loop muted playsinline width="100%"></video>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 본 프로젝트는 대형언어모델(LLM)과 Vision AI 모델을 결합하여, 5축 다관절 로봇(DOFBot)을 자연어로 자율 제어하는 **VLA(Vision-Language-Action) 기반의 지능형 로봇 제어 시스템**입니다.  
 물리 하드웨어(DOFBot)뿐만 아니라 **PyBullet 기반 가상 시뮬레이션 환경**을 지원하여 별도의 로봇 하드웨어 없이도 동작을 테스트하고 검증할 수 있습니다.
