@@ -4,7 +4,7 @@ from pydantic import BaseModel
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent # project root
-ENV_PATH = ".env.pybullet"
+ENV_PATH = ".env"
 
 load_dotenv(BASE_DIR / ENV_PATH, override=True)
 
