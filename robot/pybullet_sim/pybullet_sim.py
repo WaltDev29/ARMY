@@ -20,9 +20,9 @@ def run_simulation():
     gripper_joints = [5,6]
     
     # ============ Loop 변수 ============
-    SIM_HZ = 240.0
+    SIM_HZ = 120.0
     SIM_DT = 1.0 / SIM_HZ
-    CAM_HZ = 30.0    
+    CAM_HZ = 20.0    
     CAM_DT = 1.0 / CAM_HZ
     
     last_time = time.time()
@@ -78,7 +78,7 @@ def run_simulation():
 
 
     # ============ 카메라 설정 ============
-    WIDTH, HEIGHT = 720, 720
+    WIDTH, HEIGHT = 480, 480
     view_matrix = p.computeViewMatrix(
         cameraEyePosition=[0.5, 0, 0.5], # 카메라 위치
         cameraTargetPosition=[0, 0, 0], # 카메라가 바라볼 좌표
@@ -115,8 +115,6 @@ def run_simulation():
 
     while True:
         current_time = time.time()
-        p.stepSimulation() # 시뮬레이션 스텝 실행
-        
 
         with shared.cmd_lock:
             # ====================================
@@ -267,7 +265,10 @@ def run_simulation():
                 
                 shared.command["gripper_cmd"] = None
         
-        
+        # ====================================
+        # 물리 시뮬레이션 스텝 실행 (120Hz 고정)
+        # ====================================
+        p.stepSimulation()
 
         # ====================================
         # 데이터 업데이트
@@ -301,14 +302,17 @@ def run_simulation():
             shared.joints_degrees = joints
             shared.object_info = obj_data
 
-
-
         # ====================================
-        # 카메라 업데이트
+        # 카메라 업데이트 (20 FPS)
         # ====================================
         if current_time - last_cam_time >= CAM_DT:
-            img = p.getCameraImage(WIDTH, HEIGHT, view_matrix, projection_matrix, renderer=p.ER_BULLET_HARDWARE_OPENGL)
-            w, h, rgb, depth, seg = img
+            img = p.getCameraImage(
+                WIDTH, HEIGHT,
+                view_matrix, projection_matrix,
+                renderer=p.ER_BULLET_HARDWARE_OPENGL,
+                flags=p.ER_NO_SEGMENTATION_MASK
+            )
+            w, h, rgb, depth, _ = img
             
             # RGB 이미지
             rgb = np.reshape(rgb, (h, w, 4))[:, :, :3].astype(np.uint8)
@@ -324,10 +328,8 @@ def run_simulation():
             
             last_cam_time = current_time
             
-            
-            
         # ====================================
-        # 시간 동기화
+        # 시간 동기화 (120Hz)
         # ====================================
         elapsed = time.time() - last_time
         if elapsed < SIM_DT:

@@ -121,8 +121,9 @@ def _get_camera():
 
         # yolo로 추론한 오브젝트의 중앙 좌표의 depth 데이터 추출
         center_z = _get_depth_value(depth, center_x, center_y)
+        h, w = np.array(depth).shape
 
-        return {'center_x': center_x, 'center_y': center_y, "center_z": center_z}
+        return {'center_x': center_x, 'center_y': center_y, "center_z": center_z, "cam_w": w, "cam_h": h}
     else:
         return None
 
@@ -136,7 +137,9 @@ def get_vision_object_pos() -> dict:
     object_xyz = _get_camera()
     if object_xyz is None: return {"error": "오브젝트를 찾지 못했습니다."}
 
-    pc = _pixel_to_camera(**object_xyz, cam_width=720, cam_height=720)
+    cam_w = object_xyz.pop("cam_w", 480)
+    cam_h = object_xyz.pop("cam_h", 480)
+    pc = _pixel_to_camera(**object_xyz, cam_width=cam_w, cam_height=cam_h)
     if pc is None: return {"error": "카메라 좌표 변환 실패."}
 
     pw = _camera_to_world(pc, camera_pos=[0.5, 0, 0.5], target=[0,0,0], up=[0,0,1])
