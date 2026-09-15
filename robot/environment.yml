@@ -1,4 +1,4 @@
-name: pybullet_env
+name: pybullet
 channels:
   - defaults
   - https://repo.anaconda.com/pkgs/main

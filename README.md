@@ -48,9 +48,23 @@ flowchart TD
 
 ## ⚙️ 환경 설정 (Environment Setup)
 
-프로젝트 루트 및 비전 모듈 디렉토리에 제공되는 `.env.example`을 복사하여 `.env` 파일을 생성합니다.
+### 1. Conda 가상환경 생성 (`environment.yml`)
+각 모듈별 디렉토리에 포함된 `environment.yml` 파일을 사용하여 사전에 필요한 가상환경을 생성합니다.
 
-### 1. 루트 환경변수 설정 (`.env`)
+```bash
+# 1) Robot (PyBullet 시뮬레이션) 가상환경 생성 -> pybullet 환경
+conda env create -f robot/environment.yml
+
+# 2) Vision (비전 모델) 가상환경 생성 -> vision 환경
+conda env create -f vision/environment.yml
+
+# 3) Agent (AI 에이전트) 가상환경 생성 -> agent 환경
+conda env create -f agent/environment.yml
+```
+
+---
+
+### 2. 루트 환경변수 설정 (`.env`)
 루트 디렉토리의 `.env.example`을 복사하여 `.env`를 생성하고, 구동 환경(PyBullet 시뮬레이션 또는 실제 DOFBot) 및 LLM 설정을 진행합니다.
 
 ```bash
@@ -83,7 +97,7 @@ LLM_BASE_URL=
 API_KEY=your_openai_api_key_here
 ```
 
-### 2. 비전 모듈 환경변수 설정 (`vision/.env`)
+### 3. 비전 모듈 환경변수 설정 (`vision/.env`)
 비전 모듈 디렉토리로 이동하여 `.env.example`을 복사합니다.
 ```bash
 # vision 디렉토리 내에서
@@ -103,36 +117,46 @@ REALSENSE=False   # PyBullet 환경: False, RealSense Depth 카메라 연결 시
 
 ## 🚀 실행 가이드 (Quick Start)
 
-시스템 구동을 위해 3개의 터미널에서 각 서비스를 순서대로 실행합니다.
+시스템 구동을 위해 각 터미널에서 서비스를 순서대로 실행합니다.
 
 ### 🎮 A. PyBullet 시뮬레이션 모드로 실행 (하드웨어 미보유 시)
 
 1. **터미널 1: Robot 시뮬레이터 서버 구동 (Port 5000)**
    ```bash
    cd robot
-   conda activate robot
+   conda activate pybullet
    python main.py
    ```
    > [!NOTE]
    > PyBullet GUI 창이 열리며 가상 환경에 Dofbot 로봇팔 및 시뮬레이션 환경이 로드됩니다.
 
-2. **터미널 2: Vision 서버 구동 (Port 8001)**
+2. **(선택) PyBullet 환경 컨트롤 웹 UI 구동 (Streamlit)**
+   PyBullet 환경 내 물체(오브젝트) 스폰, 위치 변경, 환경 리셋 등을 웹에서 GUI로 편리하게 제어할 수 있습니다.
+   ```bash
+   cd robot
+   conda activate pybullet
+   streamlit run app.py
+   ```
+   - **PyBullet 컨트롤 UI 접속:** [http://localhost:8501](http://localhost:8501)
+
+3. **터미널 2: Vision 서버 구동 (Port 8001)**
    ```bash
    cd vision
    conda activate vision
    python main.py
    ```
 
-3. **터미널 3: AI Agent 서버 구동 (Port 8000)**
+4. **터미널 3: AI Agent 서버 구동 (Port 8000)**
    ```bash
    cd agent
    conda activate agent
    python main.py
    ```
 
-4. **웹 관제 UI 접속**
+5. **웹 관제 UI 접속**
    - **통합 Agent 대시보드:** [http://localhost:8000](http://localhost:8000)
    - **비전 전용 관제 화면:** [http://localhost:8001](http://localhost:8001)
+   - **PyBullet 시뮬레이터 컨트롤 UI:** [http://localhost:8501](http://localhost:8501)
 
 ---
 
